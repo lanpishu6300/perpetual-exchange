@@ -25,6 +25,10 @@ public:
     // Initialize with configuration
     bool initialize(const std::string& config_file);
     
+    // Disable rate limiting (for benchmarks)
+    void disable_rate_limiting() { rate_limiting_enabled_ = false; }
+    void enable_rate_limiting() { rate_limiting_enabled_ = true; }
+    
     // Process order with validation and rate limiting
     std::vector<Trade> process_order_production(Order* order);
     
@@ -58,6 +62,7 @@ private:
     std::unique_ptr<PositionManager> position_manager_;
     
     bool initialized_ = false;
+    bool rate_limiting_enabled_ = true;
     std::atomic<bool> shutting_down_{false};
     double default_leverage_ = 10.0;
 };
