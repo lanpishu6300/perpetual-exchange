@@ -92,7 +92,7 @@ std::vector<Trade> MatchingEngineARTSIMD::match_order_art_simd(Order* order) {
         
         while (order->remaining_quantity > 0 && !bids.empty()) {
             // Use SIMD-optimized best price lookup
-            Price best_bid = bids.best_price_simd();
+            Price best_bid = bids.best_price();
             if (best_bid == 0 || order->price > best_bid) {
                 break;  // Cannot match
             }

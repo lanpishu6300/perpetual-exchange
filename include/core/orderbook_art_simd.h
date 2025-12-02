@@ -86,8 +86,8 @@ public:
     bool update_order(Order* order, Price new_price, Quantity new_quantity);
     
     // Get best bid and ask (SIMD optimized)
-    Price best_bid() const { return bids_.best_price_simd(); }
-    Price best_ask() const { return asks_.best_price_simd(); }
+    Price best_bid() const { return bids_.best_price(); }
+    Price best_ask() const { return asks_.best_price(); }
     
     // Get spread
     Price spread() const;
