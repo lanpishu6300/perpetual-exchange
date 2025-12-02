@@ -187,6 +187,11 @@ bool ProductionMatchingEngine::validateOrder(const Order* order) const {
 }
 
 bool ProductionMatchingEngine::checkRateLimit(UserID user_id) {
+    // Allow bypass for benchmarks
+    if (!rate_limiting_enabled_) {
+        return true;
+    }
+    
     // Check global rate limit
     if (!global_rate_limiter_->allow()) {
         return false;
