@@ -248,6 +248,7 @@ public:
     BenchmarkResult benchmark_production(size_t num_orders, InstrumentID instrument_id) {
         ProductionMatchingEngine engine(instrument_id);
         engine.initialize(""); // Initialize with defaults
+        engine.disable_rate_limiting(); // Disable rate limiting for benchmark
         
         auto orders = generateOrders(num_orders, instrument_id);
         const size_t warmup = std::min<size_t>(1000, num_orders / 10);
