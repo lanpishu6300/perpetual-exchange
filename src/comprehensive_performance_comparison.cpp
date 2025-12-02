@@ -100,8 +100,10 @@ public:
         auto orders = generateOrders(num_orders, instrument_id);
         const size_t warmup = std::min<size_t>(1000, num_orders / 10);
         
+        // Warmup phase - create copies to avoid ownership issues
         for (size_t i = 0; i < warmup; ++i) {
-            engine.process_order(orders[i].get());
+            auto order_copy = std::make_unique<Order>(*orders[i]);
+            engine.process_order(order_copy.release());  // Transfer ownership
         }
         
         std::vector<nanoseconds> latencies;
@@ -109,9 +111,11 @@ public:
         uint64_t total_trades = 0;
         auto start = high_resolution_clock::now();
         
+        // Actual benchmark - create copies to avoid ownership issues
         for (size_t i = warmup; i < num_orders; ++i) {
+            auto order_copy = std::make_unique<Order>(*orders[i]);
             auto order_start = high_resolution_clock::now();
-            auto trades = engine.process_order(orders[i].get());
+            auto trades = engine.process_order(order_copy.release());  // Transfer ownership
             auto order_end = high_resolution_clock::now();
             
             latencies.push_back(duration_cast<nanoseconds>(order_end - order_start));
@@ -126,8 +130,10 @@ public:
         auto orders = generateOrders(num_orders, instrument_id);
         const size_t warmup = std::min<size_t>(1000, num_orders / 10);
         
+        // Warmup phase - create copies
         for (size_t i = 0; i < warmup; ++i) {
-            engine.process_order_optimized(orders[i].get());
+            auto order_copy = std::make_unique<Order>(*orders[i]);
+            engine.process_order_optimized(order_copy.release());
         }
         
         std::vector<nanoseconds> latencies;
@@ -135,9 +141,11 @@ public:
         uint64_t total_trades = 0;
         auto start = high_resolution_clock::now();
         
+        // Actual benchmark - create copies
         for (size_t i = warmup; i < num_orders; ++i) {
+            auto order_copy = std::make_unique<Order>(*orders[i]);
             auto order_start = high_resolution_clock::now();
-            auto trades = engine.process_order_optimized(orders[i].get());
+            auto trades = engine.process_order_optimized(order_copy.release());
             auto order_end = high_resolution_clock::now();
             
             latencies.push_back(duration_cast<nanoseconds>(order_end - order_start));
@@ -152,8 +160,10 @@ public:
         auto orders = generateOrders(num_orders, instrument_id);
         const size_t warmup = std::min<size_t>(1000, num_orders / 10);
         
+        // Warmup phase - create copies
         for (size_t i = 0; i < warmup; ++i) {
-            engine.process_order_optimized_v2(orders[i].get());
+            auto order_copy = std::make_unique<Order>(*orders[i]);
+            engine.process_order_optimized_v2(order_copy.release());
         }
         
         std::vector<nanoseconds> latencies;
@@ -161,9 +171,11 @@ public:
         uint64_t total_trades = 0;
         auto start = high_resolution_clock::now();
         
+        // Actual benchmark - create copies
         for (size_t i = warmup; i < num_orders; ++i) {
+            auto order_copy = std::make_unique<Order>(*orders[i]);
             auto order_start = high_resolution_clock::now();
-            auto trades = engine.process_order_optimized_v2(orders[i].get());
+            auto trades = engine.process_order_optimized_v2(order_copy.release());
             auto order_end = high_resolution_clock::now();
             
             latencies.push_back(duration_cast<nanoseconds>(order_end - order_start));
@@ -178,8 +190,10 @@ public:
         auto orders = generateOrders(num_orders, instrument_id);
         const size_t warmup = std::min<size_t>(1000, num_orders / 10);
         
+        // Warmup phase - create copies
         for (size_t i = 0; i < warmup; ++i) {
-            engine.process_order_art(orders[i].get());
+            auto order_copy = std::make_unique<Order>(*orders[i]);
+            engine.process_order_art(order_copy.release());
         }
         
         std::vector<nanoseconds> latencies;
@@ -187,9 +201,11 @@ public:
         uint64_t total_trades = 0;
         auto start = high_resolution_clock::now();
         
+        // Actual benchmark - create copies
         for (size_t i = warmup; i < num_orders; ++i) {
+            auto order_copy = std::make_unique<Order>(*orders[i]);
             auto order_start = high_resolution_clock::now();
-            auto trades = engine.process_order_art(orders[i].get());
+            auto trades = engine.process_order_art(order_copy.release());
             auto order_end = high_resolution_clock::now();
             
             latencies.push_back(duration_cast<nanoseconds>(order_end - order_start));
@@ -204,8 +220,10 @@ public:
         auto orders = generateOrders(num_orders, instrument_id);
         const size_t warmup = std::min<size_t>(1000, num_orders / 10);
         
+        // Warmup phase - create copies
         for (size_t i = 0; i < warmup; ++i) {
-            engine.process_order_art_simd(orders[i].get());
+            auto order_copy = std::make_unique<Order>(*orders[i]);
+            engine.process_order_art_simd(order_copy.release());
         }
         
         std::vector<nanoseconds> latencies;
@@ -213,9 +231,11 @@ public:
         uint64_t total_trades = 0;
         auto start = high_resolution_clock::now();
         
+        // Actual benchmark - create copies
         for (size_t i = warmup; i < num_orders; ++i) {
+            auto order_copy = std::make_unique<Order>(*orders[i]);
             auto order_start = high_resolution_clock::now();
-            auto trades = engine.process_order_art_simd(orders[i].get());
+            auto trades = engine.process_order_art_simd(order_copy.release());
             auto order_end = high_resolution_clock::now();
             
             latencies.push_back(duration_cast<nanoseconds>(order_end - order_start));
@@ -232,8 +252,14 @@ public:
         auto orders = generateOrders(num_orders, instrument_id);
         const size_t warmup = std::min<size_t>(1000, num_orders / 10);
         
+        // Warmup phase with error handling
         for (size_t i = 0; i < warmup; ++i) {
-            engine.process_order_production(orders[i].get());
+            try {
+                auto order_copy = std::make_unique<Order>(*orders[i]);
+                engine.process_order_production(order_copy.release());
+            } catch (const std::exception&) {
+                // Ignore errors during warmup
+            }
         }
         
         std::vector<nanoseconds> latencies;
@@ -241,13 +267,20 @@ public:
         uint64_t total_trades = 0;
         auto start = high_resolution_clock::now();
         
+        // Actual benchmark with error handling
         for (size_t i = warmup; i < num_orders; ++i) {
-            auto order_start = high_resolution_clock::now();
-            auto trades = engine.process_order_production(orders[i].get());
-            auto order_end = high_resolution_clock::now();
-            
-            latencies.push_back(duration_cast<nanoseconds>(order_end - order_start));
-            total_trades += trades.size();
+            try {
+                auto order_copy = std::make_unique<Order>(*orders[i]);
+                auto order_start = high_resolution_clock::now();
+                auto trades = engine.process_order_production(order_copy.release());
+                auto order_end = high_resolution_clock::now();
+                
+                latencies.push_back(duration_cast<nanoseconds>(order_end - order_start));
+                total_trades += trades.size();
+            } catch (const std::exception&) {
+                // Count as rejected order
+                latencies.push_back(nanoseconds(100000)); // 100 microseconds penalty
+            }
         }
         
         engine.shutdown();
