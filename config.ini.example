@@ -18,6 +18,14 @@ rate_limit.per_user_burst_size=2000.0
 limits.max_orders_per_user=10000
 limits.max_position_size=1000000
 
+# Validation
+validation.min_price=0.0001
+validation.max_price=1000000.0
+validation.min_quantity=0.0001
+validation.max_quantity=1000000.0
+validation.price_tick=0.01
+validation.quantity_step=0.0001
+
 # Persistence
 persistence.enabled=true
 persistence.db_path=./data

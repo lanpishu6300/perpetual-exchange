@@ -9,6 +9,9 @@
 #include "persistence.h"
 #include "persistence_optimized.h"
 #include "health_check.h"
+#include "order_validator.h"
+#include "account_manager.h"
+#include "position_manager.h"
 #include <memory>
 
 namespace perpetual {
@@ -43,13 +46,20 @@ private:
     bool checkBalance(UserID user_id, Price price, Quantity quantity);
     bool checkPositionLimit(UserID user_id, InstrumentID instrument_id, Quantity quantity);
     
+    // Enhanced validation using OrderValidator
+    OrderValidator::ValidationResult validateOrderEnhanced(const Order* order) const;
+    
     std::unique_ptr<RateLimiter> global_rate_limiter_;
     std::unique_ptr<RateLimiter> user_rate_limiter_;
     std::unique_ptr<PersistenceManager> persistence_;  // Legacy
     std::unique_ptr<OptimizedPersistenceManager> optimized_persistence_;  // Optimized version
+    std::unique_ptr<OrderValidator> order_validator_;
+    std::unique_ptr<AccountBalanceManager> account_manager_;
+    std::unique_ptr<PositionManager> position_manager_;
     
     bool initialized_ = false;
     std::atomic<bool> shutting_down_{false};
+    double default_leverage_ = 10.0;
 };
 
 } // namespace perpetual
