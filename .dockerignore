@@ -1,0 +1,8 @@
+build/
+.git/
+.gitignore
+*.md
+*.txt
+!CMakeLists.txt
+.vscode/
+.idea/

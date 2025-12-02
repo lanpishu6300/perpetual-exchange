@@ -1,0 +1,33 @@
+# Perpetual Exchange Configuration File
+# Copy this to config.ini and modify as needed
+
+# Logging
+log.level=INFO
+log.file=logs/exchange.log
+
+# Matching Engine
+matching.threads=4
+
+# Rate Limiting
+rate_limit.global_orders_per_second=10000.0
+rate_limit.burst_size=20000.0
+rate_limit.per_user_orders_per_second=1000.0
+rate_limit.per_user_burst_size=2000.0
+
+# Limits
+limits.max_orders_per_user=10000
+limits.max_position_size=1000000
+
+# Persistence
+persistence.enabled=true
+persistence.db_path=./data
+persistence.buffer_size=10000
+persistence.flush_interval_ms=100
+
+# Metrics
+metrics.enabled=true
+metrics.port=9090
+
+# Instrument Configuration
+instrument.default_leverage=10
+instrument.maintenance_margin_rate=500
