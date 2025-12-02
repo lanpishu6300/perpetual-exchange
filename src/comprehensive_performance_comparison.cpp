@@ -365,14 +365,15 @@ public:
     }
 };
 
-int main() {
+int main(int argc, char* argv[]) {
     std::cout << "========================================\n";
     std::cout << "Comprehensive Performance Comparison\n";
     std::cout << "========================================\n\n";
     
     PerformanceComparator comparator;
     InstrumentID instrument_id = 1;
-    const size_t num_orders = 50000;
+    // Use command line argument or default to 10000 for faster testing
+    const size_t num_orders = (argc > 1) ? std::stoul(argv[1]) : 10000;
     
     std::cout << "Testing " << num_orders << " orders per version...\n\n";
     
