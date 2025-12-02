@@ -210,21 +210,21 @@ void OrderBookSideART::add_order_to_price_level(PriceLevel* level, Order* order)
 }
 
 void OrderBookSideART::remove_order_from_price_level(PriceLevel* level, Order* order) {
-    if (order->prev_at_price) {
-        order->prev_at_price->next_at_price = order->next_at_price;
+    if (order->prev_same_price) {
+        order->prev_same_price->next_same_price = order->next_same_price;
     } else {
-        level->first_order = order->next_at_price;
+        level->first_order = order->next_same_price;
     }
     
-    if (order->next_at_price) {
-        order->next_at_price->prev_at_price = order->prev_at_price;
+    if (order->next_same_price) {
+        order->next_same_price->prev_same_price = order->prev_same_price;
     } else {
-        level->last_order = order->prev_at_price;
+        level->last_order = order->prev_same_price;
     }
     
     level->total_quantity -= order->quantity;
-    order->next_at_price = nullptr;
-    order->prev_at_price = nullptr;
+    order->next_same_price = nullptr;
+    order->prev_same_price = nullptr;
 }
 
 // OrderBookART implementation
