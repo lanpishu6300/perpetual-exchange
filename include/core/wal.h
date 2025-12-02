@@ -1,6 +1,7 @@
 #pragma once
 
-#include "core/types.h"
+#include "types.h"
+#include "order.h"  // For Order struct
 #include <string>
 #include <vector>
 #include <fstream>
@@ -8,6 +9,9 @@
 #include <mutex>
 
 namespace perpetual {
+
+// Trade structure forward declaration
+struct Trade;
 
 // Write-Ahead Log for data durability
 class WriteAheadLog {
@@ -51,10 +55,10 @@ private:
         // Data follows
     };
     
-    std::string serialize_order(const Order& order);
-    std::string serialize_trade(const Trade& trade);
-    Order deserialize_order(const std::string& data);
-    Trade deserialize_trade(const std::string& data);
+    std::string serialize_order(const Order* order);
+    std::string serialize_trade(const Trade* trade);
+    void deserialize_order(const std::string& data, Order* order);
+    void deserialize_trade(const std::string& data, Trade* trade);
     
     uint32_t calculate_checksum(const std::string& data);
     bool verify_checksum(const std::string& data, uint32_t expected);
