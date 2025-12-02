@@ -10,7 +10,6 @@
 #include <iomanip>
 #include <fstream>
 #include <algorithm>
-#include <numeric>
 
 using namespace perpetual;
 using namespace std::chrono;
@@ -28,26 +27,11 @@ struct BenchmarkResult {
     double throughput;
     uint64_t total_trades;
     double trade_rate;
-    size_t memory_usage_mb;
 };
 
 class PerformanceComparator {
 public:
-    PerformanceComparator() {
-        results_.reserve(10);
-    }
-    
-    template<typename EngineType>
-    BenchmarkResult benchmark(const std::string& name, size_t num_orders, 
-                             InstrumentID instrument_id) {
-        BenchmarkResult result;
-        result.version_name = name;
-        result.num_orders = num_orders;
-        
-        // Create engine
-        EngineType engine(instrument_id);
-        
-        // Generate test orders
+    std::vector<std::unique_ptr<Order>> generateOrders(size_t num_orders, InstrumentID instrument_id) {
         std::vector<std::unique_ptr<Order>> orders;
         orders.reserve(num_orders);
         
@@ -69,81 +53,154 @@ public:
             ));
         }
         
-        // Warm up
-        const size_t warmup = std::min<size_t>(1000, num_orders / 10);
-        for (size_t i = 0; i < warmup; ++i) {
-            if constexpr (std::is_same_v<EngineType, OptimizedMatchingEngine>) {
-                engine.process_order_optimized(orders[i].get());
-            } else if constexpr (std::is_same_v<EngineType, MatchingEngineOptimizedV2>) {
-                engine.process_order_optimized_v2(orders[i].get());
-            } else if constexpr (std::is_same_v<EngineType, ProductionMatchingEngine>) {
-                engine.process_order_production(orders[i].get());
-            } else {
-                engine.process_order(orders[i].get());
-            }
-        }
-        
-        // Benchmark
-        std::vector<nanoseconds> latencies;
-        latencies.reserve(num_orders - warmup);
-        
-        uint64_t total_trades = 0;
-        auto start = high_resolution_clock::now();
-        
-        for (size_t i = warmup; i < num_orders; ++i) {
-            auto order_start = high_resolution_clock::now();
-            
-            std::vector<Trade> trades;
-            if constexpr (std::is_same_v<EngineType, OptimizedMatchingEngine>) {
-                trades = engine.process_order_optimized(orders[i].get());
-            } else if constexpr (std::is_same_v<EngineType, MatchingEngineOptimizedV2>) {
-                trades = engine.process_order_optimized_v2(orders[i].get());
-            } else if constexpr (std::is_same_v<EngineType, ProductionMatchingEngine>) {
-                trades = engine.process_order_production(orders[i].get());
-            } else {
-                trades = engine.process_order(orders[i].get());
-            }
-            
-            auto order_end = high_resolution_clock::now();
-            auto latency = duration_cast<nanoseconds>(order_end - order_start);
-            latencies.push_back(latency);
-            
-            total_trades += trades.size();
-        }
+        return orders;
+    }
+    
+    BenchmarkResult calculateResults(const std::string& name,
+                                    const std::vector<nanoseconds>& latencies,
+                                    uint64_t total_trades,
+                                    size_t num_orders,
+                                    size_t warmup,
+                                    high_resolution_clock::time_point start) {
+        BenchmarkResult result;
+        result.version_name = name;
+        result.num_orders = num_orders;
         
         auto end = high_resolution_clock::now();
         auto duration = duration_cast<milliseconds>(end - start);
         
-        // Calculate statistics
         result.total_time = duration;
         result.throughput = ((num_orders - warmup) * 1000.0) / duration.count();
         result.total_trades = total_trades;
         result.trade_rate = (total_trades * 100.0) / (num_orders - warmup);
         
-        // Latency statistics
-        std::sort(latencies.begin(), latencies.end());
-        nanoseconds total_latency{0};
-        for (const auto& lat : latencies) {
-            total_latency += lat;
+        if (!latencies.empty()) {
+            std::vector<nanoseconds> sorted_latencies = latencies;
+            std::sort(sorted_latencies.begin(), sorted_latencies.end());
+            
+            int64_t total_ns = 0;
+            for (const auto& lat : sorted_latencies) {
+                total_ns += lat.count();
+            }
+            result.avg_latency = nanoseconds(total_ns / sorted_latencies.size());
+            result.min_latency = sorted_latencies.front();
+            result.max_latency = sorted_latencies.back();
+            result.p50_latency = sorted_latencies[sorted_latencies.size() * 0.5];
+            result.p90_latency = sorted_latencies[sorted_latencies.size() * 0.9];
+            result.p99_latency = sorted_latencies[sorted_latencies.size() * 0.99];
         }
-        result.avg_latency = nanoseconds(total_latency.count() / latencies.size());
-        result.min_latency = latencies.front();
-        result.max_latency = latencies.back();
-        result.p50_latency = latencies[latencies.size() * 0.5];
-        result.p90_latency = latencies[latencies.size() * 0.9];
-        result.p99_latency = latencies[latencies.size() * 0.99];
-        
-        // Memory usage (simplified)
-        result.memory_usage_mb = 0; // Would need actual memory profiling
         
         return result;
     }
     
-    void addResult(const BenchmarkResult& result) {
-        results_.push_back(result);
+    BenchmarkResult benchmark_original(size_t num_orders, InstrumentID instrument_id) {
+        MatchingEngine engine(instrument_id);
+        auto orders = generateOrders(num_orders, instrument_id);
+        const size_t warmup = std::min<size_t>(1000, num_orders / 10);
+        
+        for (size_t i = 0; i < warmup; ++i) {
+            engine.process_order(orders[i].get());
+        }
+        
+        std::vector<nanoseconds> latencies;
+        latencies.reserve(num_orders - warmup);
+        uint64_t total_trades = 0;
+        auto start = high_resolution_clock::now();
+        
+        for (size_t i = warmup; i < num_orders; ++i) {
+            auto order_start = high_resolution_clock::now();
+            auto trades = engine.process_order(orders[i].get());
+            auto order_end = high_resolution_clock::now();
+            
+            latencies.push_back(duration_cast<nanoseconds>(order_end - order_start));
+            total_trades += trades.size();
+        }
+        
+        return calculateResults("Original", latencies, total_trades, num_orders, warmup, start);
     }
     
-    void generateReport(const std::string& filename) {
+    BenchmarkResult benchmark_optimized(size_t num_orders, InstrumentID instrument_id) {
+        OptimizedMatchingEngine engine(instrument_id);
+        auto orders = generateOrders(num_orders, instrument_id);
+        const size_t warmup = std::min<size_t>(1000, num_orders / 10);
+        
+        for (size_t i = 0; i < warmup; ++i) {
+            engine.process_order_optimized(orders[i].get());
+        }
+        
+        std::vector<nanoseconds> latencies;
+        latencies.reserve(num_orders - warmup);
+        uint64_t total_trades = 0;
+        auto start = high_resolution_clock::now();
+        
+        for (size_t i = warmup; i < num_orders; ++i) {
+            auto order_start = high_resolution_clock::now();
+            auto trades = engine.process_order_optimized(orders[i].get());
+            auto order_end = high_resolution_clock::now();
+            
+            latencies.push_back(duration_cast<nanoseconds>(order_end - order_start));
+            total_trades += trades.size();
+        }
+        
+        return calculateResults("Optimized", latencies, total_trades, num_orders, warmup, start);
+    }
+    
+    BenchmarkResult benchmark_optimized_v2(size_t num_orders, InstrumentID instrument_id) {
+        MatchingEngineOptimizedV2 engine(instrument_id);
+        auto orders = generateOrders(num_orders, instrument_id);
+        const size_t warmup = std::min<size_t>(1000, num_orders / 10);
+        
+        for (size_t i = 0; i < warmup; ++i) {
+            engine.process_order_optimized_v2(orders[i].get());
+        }
+        
+        std::vector<nanoseconds> latencies;
+        latencies.reserve(num_orders - warmup);
+        uint64_t total_trades = 0;
+        auto start = high_resolution_clock::now();
+        
+        for (size_t i = warmup; i < num_orders; ++i) {
+            auto order_start = high_resolution_clock::now();
+            auto trades = engine.process_order_optimized_v2(orders[i].get());
+            auto order_end = high_resolution_clock::now();
+            
+            latencies.push_back(duration_cast<nanoseconds>(order_end - order_start));
+            total_trades += trades.size();
+        }
+        
+        return calculateResults("Optimized V2", latencies, total_trades, num_orders, warmup, start);
+    }
+    
+    BenchmarkResult benchmark_production(size_t num_orders, InstrumentID instrument_id) {
+        ProductionMatchingEngine engine(instrument_id);
+        engine.initialize(""); // Initialize with defaults
+        
+        auto orders = generateOrders(num_orders, instrument_id);
+        const size_t warmup = std::min<size_t>(1000, num_orders / 10);
+        
+        for (size_t i = 0; i < warmup; ++i) {
+            engine.process_order_production(orders[i].get());
+        }
+        
+        std::vector<nanoseconds> latencies;
+        latencies.reserve(num_orders - warmup);
+        uint64_t total_trades = 0;
+        auto start = high_resolution_clock::now();
+        
+        for (size_t i = warmup; i < num_orders; ++i) {
+            auto order_start = high_resolution_clock::now();
+            auto trades = engine.process_order_production(orders[i].get());
+            auto order_end = high_resolution_clock::now();
+            
+            latencies.push_back(duration_cast<nanoseconds>(order_end - order_start));
+            total_trades += trades.size();
+        }
+        
+        engine.shutdown();
+        return calculateResults("Production", latencies, total_trades, num_orders, warmup, start);
+    }
+    
+    void generateReport(const std::vector<BenchmarkResult>& results, const std::string& filename) {
         std::ofstream report(filename);
         
         report << "========================================\n";
@@ -167,7 +224,7 @@ public:
                << std::setw(15) << "Total Trades\n";
         report << std::string(120, '-') << "\n";
         
-        for (const auto& r : results_) {
+        for (const auto& r : results) {
             report << std::left << std::setw(25) << r.version_name
                    << std::setw(15) << (r.throughput / 1000.0) << " K"
                    << std::setw(15) << (r.avg_latency.count() / 1000.0) << " μs"
@@ -176,7 +233,7 @@ public:
                    << std::setw(15) << r.total_trades << "\n";
         }
         
-        // Detailed latency distribution
+        // Latency distribution
         report << "\n\nLatency Distribution (μs)\n";
         report << std::string(120, '=') << "\n";
         report << std::left << std::setw(25) << "Version"
@@ -187,7 +244,7 @@ public:
                << std::setw(15) << "Max\n";
         report << std::string(120, '-') << "\n";
         
-        for (const auto& r : results_) {
+        for (const auto& r : results) {
             report << std::left << std::setw(25) << r.version_name
                    << std::setw(15) << (r.min_latency.count() / 1000.0)
                    << std::setw(15) << (r.p50_latency.count() / 1000.0)
@@ -197,14 +254,14 @@ public:
         }
         
         // Improvement analysis
-        if (results_.size() >= 2) {
+        if (results.size() >= 2) {
             report << "\n\nPerformance Improvements (vs Baseline)\n";
             report << std::string(120, '=') << "\n";
             
-            const auto& baseline = results_[0];
+            const auto& baseline = results[0];
             
-            for (size_t i = 1; i < results_.size(); ++i) {
-                const auto& current = results_[i];
+            for (size_t i = 1; i < results.size(); ++i) {
+                const auto& current = results[i];
                 
                 double throughput_improvement = 
                     ((current.throughput - baseline.throughput) / baseline.throughput) * 100.0;
@@ -216,9 +273,9 @@ public:
                      baseline.p99_latency.count()) * 100.0;
                 
                 report << "\n" << current.version_name << ":\n";
-                report << "  Throughput: " << throughput_improvement << "% improvement\n";
-                report << "  Avg Latency: " << latency_improvement << "% reduction\n";
-                report << "  P99 Latency: " << p99_improvement << "% reduction\n";
+                report << "  Throughput: +" << throughput_improvement << "%\n";
+                report << "  Avg Latency: -" << latency_improvement << "%\n";
+                report << "  P99 Latency: -" << p99_improvement << "%\n";
             }
         }
         
@@ -229,7 +286,7 @@ public:
         report.close();
     }
     
-    void printSummary() {
+    void printSummary(const std::vector<BenchmarkResult>& results) {
         std::cout << "\n" << std::string(120, '=') << "\n";
         std::cout << "Performance Comparison Summary\n";
         std::cout << std::string(120, '=') << "\n\n";
@@ -242,7 +299,7 @@ public:
                   << std::setw(15) << "Trade Rate\n";
         std::cout << std::string(120, '-') << "\n";
         
-        for (const auto& r : results_) {
+        for (const auto& r : results) {
             std::cout << std::left << std::setw(25) << r.version_name
                       << std::setw(15) << (r.throughput / 1000.0) << " K"
                       << std::setw(15) << (r.avg_latency.count() / 1000.0) << " μs"
@@ -252,9 +309,6 @@ public:
         
         std::cout << "\n";
     }
-    
-private:
-    std::vector<BenchmarkResult> results_;
 };
 
 int main() {
@@ -268,111 +322,45 @@ int main() {
     
     std::cout << "Testing " << num_orders << " orders per version...\n\n";
     
+    std::vector<BenchmarkResult> results;
+    
     // Test Original Version
     std::cout << "[1/4] Testing Original Version...\n";
-    auto result1 = comparator.benchmark<MatchingEngine>(
-        "Original", num_orders, instrument_id);
-    comparator.addResult(result1);
+    auto result1 = comparator.benchmark_original(num_orders, instrument_id);
+    results.push_back(result1);
     std::cout << "  Throughput: " << result1.throughput / 1000.0 << " K orders/sec\n";
     std::cout << "  Avg Latency: " << result1.avg_latency.count() / 1000.0 << " μs\n";
     
     // Test Optimized Version
     std::cout << "\n[2/4] Testing Optimized Version (Memory Pool + Lock-Free)...\n";
-    auto result2 = comparator.benchmark<OptimizedMatchingEngine>(
-        "Optimized", num_orders, instrument_id);
-    comparator.addResult(result2);
+    auto result2 = comparator.benchmark_optimized(num_orders, instrument_id);
+    results.push_back(result2);
     std::cout << "  Throughput: " << result2.throughput / 1000.0 << " K orders/sec\n";
     std::cout << "  Avg Latency: " << result2.avg_latency.count() / 1000.0 << " μs\n";
     double improvement2 = ((result2.throughput - result1.throughput) / result1.throughput) * 100.0;
-    std::cout << "  Improvement: " << improvement2 << "%\n";
+    std::cout << "  Improvement: +" << improvement2 << "%\n";
     
     // Test Optimized V2 Version
     std::cout << "\n[3/4] Testing Optimized V2 Version (Hot Path)...\n";
-    auto result3 = comparator.benchmark<MatchingEngineOptimizedV2>(
-        "Optimized V2", num_orders, instrument_id);
-    comparator.addResult(result3);
+    auto result3 = comparator.benchmark_optimized_v2(num_orders, instrument_id);
+    results.push_back(result3);
     std::cout << "  Throughput: " << result3.throughput / 1000.0 << " K orders/sec\n";
     std::cout << "  Avg Latency: " << result3.avg_latency.count() / 1000.0 << " μs\n";
     double improvement3 = ((result3.throughput - result1.throughput) / result1.throughput) * 100.0;
-    std::cout << "  Improvement: " << improvement3 << "%\n";
+    std::cout << "  Improvement: +" << improvement3 << "%\n";
     
-    // Test Production Version (with all features)
+    // Test Production Version
     std::cout << "\n[4/4] Testing Production Version (Full Features)...\n";
-    ProductionMatchingEngine engine_prod(instrument_id);
-    engine_prod.initialize(""); // Initialize with defaults
-    
-    // Manual benchmark for production version
-    BenchmarkResult result4;
-    result4.version_name = "Production";
-    result4.num_orders = num_orders;
-    
-    std::vector<std::unique_ptr<Order>> orders;
-    orders.reserve(num_orders);
-    
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<double> price_dist(40000.0, 60000.0);
-    std::uniform_real_distribution<double> qty_dist(0.01, 1.0);
-    std::uniform_real_distribution<double> side_dist(0.0, 1.0);
-    
-    for (size_t i = 0; i < num_orders; ++i) {
-        UserID user_id = (i % 1000) + 1;
-        OrderSide side = (side_dist(gen) < 0.5) ? OrderSide::BUY : OrderSide::SELL;
-        Price price = double_to_price(price_dist(gen));
-        Quantity quantity = double_to_quantity(qty_dist(gen));
-        
-        orders.push_back(std::make_unique<Order>(
-            i + 1, user_id, instrument_id,
-            side, price, quantity, OrderType::LIMIT
-        ));
-    }
-    
-    const size_t warmup = 1000;
-    for (size_t i = 0; i < warmup; ++i) {
-        engine_prod.process_order_production(orders[i].get());
-    }
-    
-    std::vector<nanoseconds> latencies;
-    latencies.reserve(num_orders - warmup);
-    uint64_t total_trades = 0;
-    
-    auto start = high_resolution_clock::now();
-    for (size_t i = warmup; i < num_orders; ++i) {
-        auto order_start = high_resolution_clock::now();
-        auto trades = engine_prod.process_order_production(orders[i].get());
-        auto order_end = high_resolution_clock::now();
-        
-        latencies.push_back(duration_cast<nanoseconds>(order_end - order_start));
-        total_trades += trades.size();
-    }
-    auto end = high_resolution_clock::now();
-    
-    result4.total_time = duration_cast<milliseconds>(end - start);
-    result4.throughput = ((num_orders - warmup) * 1000.0) / result4.total_time.count();
-    result4.total_trades = total_trades;
-    result4.trade_rate = (total_trades * 100.0) / (num_orders - warmup);
-    
-    std::sort(latencies.begin(), latencies.end());
-    nanoseconds total_latency{0};
-    for (const auto& lat : latencies) {
-        total_latency += lat;
-    }
-    result4.avg_latency = nanoseconds(total_latency.count() / latencies.size());
-    result4.min_latency = latencies.front();
-    result4.max_latency = latencies.back();
-    result4.p50_latency = latencies[latencies.size() * 0.5];
-    result4.p90_latency = latencies[latencies.size() * 0.9];
-    result4.p99_latency = latencies[latencies.size() * 0.99];
-    
-    comparator.addResult(result4);
+    auto result4 = comparator.benchmark_production(num_orders, instrument_id);
+    results.push_back(result4);
     std::cout << "  Throughput: " << result4.throughput / 1000.0 << " K orders/sec\n";
     std::cout << "  Avg Latency: " << result4.avg_latency.count() / 1000.0 << " μs\n";
     double improvement4 = ((result4.throughput - result1.throughput) / result1.throughput) * 100.0;
-    std::cout << "  Improvement: " << improvement4 << "%\n";
+    std::cout << "  Improvement: +" << improvement4 << "%\n";
     
     // Generate report
-    comparator.printSummary();
-    comparator.generateReport("comprehensive_performance_report.txt");
+    comparator.printSummary(results);
+    comparator.generateReport(results, "comprehensive_performance_report.txt");
     
     std::cout << "\n========================================\n";
     std::cout << "Detailed report saved to: comprehensive_performance_report.txt\n";
@@ -380,4 +368,3 @@ int main() {
     
     return 0;
 }
-
