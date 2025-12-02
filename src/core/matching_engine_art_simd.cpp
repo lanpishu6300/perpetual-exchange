@@ -138,7 +138,7 @@ std::vector<Trade> MatchingEngineARTSIMD::match_order_art_simd(Order* order) {
             trade.price = trade_price;
             trade.quantity = trade_qty;
             trade.timestamp = get_current_timestamp();
-            trade.sequence_id = get_current_timestamp();  // Use timestamp as sequence
+            trade.sequence_id = ++trade_sequence_;  // Use sequence counter
             trade.is_taker_buy = false;
             trades.push_back(trade);
             
