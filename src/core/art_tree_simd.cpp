@@ -77,10 +77,11 @@ int ARTTreeSIMD::check_prefix_avx2(ARTNode* node, const uint8_t* key, int depth)
 }
 
 ARTNode* ARTTreeSIMD::find_child_simd_node16(ARTNode16* node, uint8_t byte) const {
-    if (node->count_ == 0) {
+    if (node == nullptr || node->count_ == 0) {
         return nullptr;
     }
     
+#ifdef __AVX2__
     // Use SIMD to compare all keys at once
     __m128i keys_vec = _mm_loadu_si128(reinterpret_cast<const __m128i*>(node->keys_));
     __m128i byte_vec = _mm_set1_epi8(byte);
@@ -96,6 +97,14 @@ ARTNode* ARTTreeSIMD::find_child_simd_node16(ARTNode16* node, uint8_t byte) cons
     if (index < node->count_) {
         return node->children_[index];
     }
+#else
+    // Scalar fallback
+    for (int i = 0; i < node->count_; ++i) {
+        if (node->keys_[i] == byte) {
+            return node->children_[i];
+        }
+    }
+#endif
     
     return nullptr;
 }
@@ -125,6 +134,10 @@ int ARTTreeSIMD::find_child_index_simd_node16(const uint8_t* keys, uint8_t count
 }
 
 ARTNode* ARTTreeSIMD::find_child_simd_node48(ARTNode48* node, uint8_t byte) const {
+    if (node == nullptr) {
+        return nullptr;
+    }
+    
     if (node->keys_[byte] == 48) {
         return nullptr;
     }
@@ -193,11 +206,34 @@ int ARTTreeSIMD::check_prefix_simd(ARTNode* node, const uint8_t* key, int depth)
 }
 
 ARTNode* ARTTreeSIMD::find_child_simd_node16(ARTNode16* node, uint8_t byte) const {
-    return find_child(node, byte);
+    if (node == nullptr || node->count_ == 0) {
+        return nullptr;
+    }
+    
+    // Scalar fallback
+    for (int i = 0; i < node->count_; ++i) {
+        if (node->keys_[i] == byte) {
+            return node->children_[i];
+        }
+    }
+    return nullptr;
 }
 
 ARTNode* ARTTreeSIMD::find_child_simd_node48(ARTNode48* node, uint8_t byte) const {
-    return find_child(node, byte);
+    if (node == nullptr) {
+        return nullptr;
+    }
+    
+    if (node->keys_[byte] == 48) {
+        return nullptr;
+    }
+    
+    int pos = node->keys_[byte];
+    if (pos < 48 && node->children_[pos] != nullptr) {
+        return node->children_[pos];
+    }
+    
+    return nullptr;
 }
 
 void ARTTreeSIMD::batch_compare_prices(const Price* prices, size_t count, Price target, bool* results) {
