@@ -11,7 +11,7 @@
 namespace perpetual {
 
 // Order book side using ART with SIMD optimizations
-class OrderBookSideARTSIMD : public OrderBookSideART {
+class OrderBookSideARTSIMD {
 public:
     OrderBookSideARTSIMD(bool is_buy);
     ~OrderBookSideARTSIMD();
