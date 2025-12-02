@@ -171,6 +171,10 @@ bool OrderBookSide::remove(Order* order) {
     return true;
 }
 
+bool OrderBookSide::empty() const {
+    return root_ == nullptr || root_ == sentinel_ || order_map_.empty();
+}
+
 Price OrderBookSide::best_price() const {
     // Note: This method assumes external synchronization
     // In production, consider using reader-writer lock or lock-free approach
