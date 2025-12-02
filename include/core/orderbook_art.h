@@ -1,6 +1,7 @@
 #pragma once
 
 #include "order.h"
+#include "orderbook.h"  // For PriceLevel definition
 #include "art_tree.h"
 #include <map>
 #include <unordered_map>
