@@ -1,0 +1,47 @@
+# Production Dockerfile for x86_64 with all optimizations
+FROM --platform=linux/amd64 ubuntu:22.04 AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    g++ \
+    make \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY . .
+
+# Build with all optimizations
+RUN mkdir -p build && cd build && \
+    cmake .. \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CXX_FLAGS="-march=native -mavx2 -mfma -O3 -flto" \
+        -DCMAKE_CXX_STANDARD=17 && \
+    cmake --build . --config Release -j$(nproc)
+
+# Production runtime stage
+FROM --platform=linux/amd64 ubuntu:22.04
+
+RUN apt-get update && apt-get install -y \
+    libstdc++6 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy binaries
+COPY --from=builder /app/build/bin/PerpetualExchange .
+COPY --from=builder /app/build/production_server .
+COPY --from=builder /app/config.ini.example ./config.ini
+
+# Create directories
+RUN mkdir -p logs data
+
+# Health check
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+    CMD test -f /app/health || exit 1
+
+# Run production server
+CMD ["./production_server", "config.ini"]

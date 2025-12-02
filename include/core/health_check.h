@@ -1,0 +1,56 @@
+#pragma once
+
+#include <string>
+#include <chrono>
+#include <atomic>
+#include <mutex>
+
+namespace perpetual {
+
+enum class HealthStatus {
+    HEALTHY = 0,
+    DEGRADED = 1,
+    UNHEALTHY = 2
+};
+
+struct HealthInfo {
+    HealthStatus status;
+    std::string message;
+    std::chrono::milliseconds uptime;
+    uint64_t total_orders;
+    uint64_t total_trades;
+    double avg_latency_us;
+};
+
+class HealthChecker {
+public:
+    static HealthChecker& getInstance() {
+        static HealthChecker instance;
+        return instance;
+    }
+    
+    void start();
+    void stop();
+    
+    HealthInfo getHealth() const;
+    HealthStatus getStatus() const { return status_.load(); }
+    
+    void setHealthy() { status_ = HealthStatus::HEALTHY; }
+    void setDegraded(const std::string& reason);
+    void setUnhealthy(const std::string& reason);
+    
+    void updateMetrics(uint64_t orders, uint64_t trades, double avg_latency_us);
+    
+private:
+    HealthChecker() = default;
+    
+    std::atomic<HealthStatus> status_{HealthStatus::HEALTHY};
+    std::atomic<uint64_t> total_orders_{0};
+    std::atomic<uint64_t> total_trades_{0};
+    std::atomic<double> avg_latency_us_{0.0};
+    std::chrono::steady_clock::time_point start_time_;
+    std::string status_message_;
+    mutable std::mutex mutex_;
+};
+
+} // namespace perpetual
