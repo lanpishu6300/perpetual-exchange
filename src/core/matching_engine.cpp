@@ -64,7 +64,13 @@ std::vector<Trade> MatchingEngine::match_order(Order* order) {
     }
     
     // Match against resting orders (hot path optimization)
-    while (order->remaining_quantity > 0 && !opposite_side->empty()) {
+    // Add safety counter to prevent infinite loops
+    const size_t max_iterations = 10000;  // Safety limit
+    size_t iteration_count = 0;
+    
+    while (order->remaining_quantity > 0 && !opposite_side->empty() && iteration_count < max_iterations) {
+        ++iteration_count;
+        
         Order* resting_order = opposite_side->best_order();
         
         if (!resting_order || !can_orders_match(order, resting_order)) {
