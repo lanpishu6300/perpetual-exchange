@@ -198,12 +198,12 @@ void OrderBookSideART::add_order_to_price_level(PriceLevel* level, Order* order)
     if (level->first_order == nullptr) {
         level->first_order = order;
         level->last_order = order;
-        order->next_at_price = nullptr;
-        order->prev_at_price = nullptr;
+        order->next_same_price = nullptr;
+        order->prev_same_price = nullptr;
     } else {
-        order->prev_at_price = level->last_order;
-        order->next_at_price = nullptr;
-        level->last_order->next_at_price = order;
+        order->prev_same_price = level->last_order;
+        order->next_same_price = nullptr;
+        level->last_order->next_same_price = order;
         level->last_order = order;
     }
     level->total_quantity += order->quantity;
