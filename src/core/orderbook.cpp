@@ -209,12 +209,23 @@ Order* OrderBookSide::best_order() const {
     }
     
     // Optimized: traverse to leftmost node with prefetching
+    // Add safety counter to prevent infinite loops
     Order* best = root_;
-    while (best->left != sentinel_) {
+    const size_t max_depth = 1000;  // Safety limit for tree depth
+    size_t depth = 0;
+    
+    while (best != nullptr && best->left != sentinel_ && depth < max_depth) {
         // Prefetch next node for better cache performance
         __builtin_prefetch(best->left, 0, 3);
         best = best->left;
+        ++depth;
     }
+    
+    // Safety check: if we hit max depth, return nullptr
+    if (depth >= max_depth) {
+        return nullptr;
+    }
+    
     return best;
 }
 
