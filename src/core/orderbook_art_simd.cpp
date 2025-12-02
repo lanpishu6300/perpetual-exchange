@@ -83,9 +83,9 @@ Price OrderBookSideARTSIMD::best_price() const {
     }
     
     if (is_buy_) {
-        return art_tree_simd_.max_key_simd();  // Highest bid
+        return art_tree_simd_.max_key();  // Highest bid
     } else {
-        return art_tree_simd_.min_key_simd();  // Lowest ask
+        return art_tree_simd_.min_key();  // Lowest ask
     }
 }
 
