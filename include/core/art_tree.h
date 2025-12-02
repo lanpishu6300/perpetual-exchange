@@ -5,6 +5,8 @@
 #include <cstring>
 #include <memory>
 #include <array>
+#include <vector>
+#include <algorithm>
 
 namespace perpetual {
 
