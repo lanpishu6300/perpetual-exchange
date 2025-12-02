@@ -11,7 +11,7 @@ namespace perpetual {
 #ifdef __AVX2__
 
 void* ARTTreeSIMD::find_simd(Price key) const {
-    // Use base class find method
+    // Use base class find method (which uses find_recursive internally)
     return find(key);
 }
 
