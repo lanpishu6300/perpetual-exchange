@@ -2,6 +2,7 @@
 
 #include "matching_engine_art.h"
 #include "orderbook_art_simd.h"
+#include "art_tree_simd_enhanced.h"
 
 namespace perpetual {
 
