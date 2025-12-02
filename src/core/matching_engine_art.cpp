@@ -41,7 +41,13 @@ std::vector<Trade> MatchingEngineART::match_order_art(Order* order) {
         // Match against asks
         OrderBookSideART& asks = orderbook_art_.asks();
         
-        while (order->remaining_quantity > 0 && !asks.empty()) {
+        // Add safety counter to prevent infinite loops
+        const size_t max_iterations = 10000;
+        size_t iteration_count = 0;
+        
+        while (order->remaining_quantity > 0 && !asks.empty() && iteration_count < max_iterations) {
+            ++iteration_count;
+            
             Price best_ask = asks.best_price();
             if (best_ask == 0 || order->price < best_ask) {
                 break;  // Cannot match
@@ -83,7 +89,13 @@ std::vector<Trade> MatchingEngineART::match_order_art(Order* order) {
         // Match against bids
         OrderBookSideART& bids = orderbook_art_.bids();
         
-        while (order->remaining_quantity > 0 && !bids.empty()) {
+        // Add safety counter to prevent infinite loops
+        const size_t max_iterations = 10000;
+        size_t iteration_count = 0;
+        
+        while (order->remaining_quantity > 0 && !bids.empty() && iteration_count < max_iterations) {
+            ++iteration_count;
+            
             Price best_bid = bids.best_price();
             if (best_bid == 0 || order->price > best_bid) {
                 break;  // Cannot match

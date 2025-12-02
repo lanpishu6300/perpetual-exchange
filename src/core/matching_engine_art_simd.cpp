@@ -35,7 +35,13 @@ std::vector<Trade> MatchingEngineARTSIMD::match_order_art_simd(Order* order) {
         // Match against asks using SIMD-optimized lookup
         OrderBookSideARTSIMD& asks = orderbook_art_simd_.asks();
         
-        while (order->remaining_quantity > 0 && !asks.empty()) {
+        // Add safety counter to prevent infinite loops
+        const size_t max_iterations = 10000;
+        size_t iteration_count = 0;
+        
+        while (order->remaining_quantity > 0 && !asks.empty() && iteration_count < max_iterations) {
+            ++iteration_count;
+            
             // Use SIMD-optimized best price lookup
             Price best_ask = asks.best_price();
             
@@ -93,7 +99,13 @@ std::vector<Trade> MatchingEngineARTSIMD::match_order_art_simd(Order* order) {
         // Match against bids using SIMD-optimized lookup
         OrderBookSideARTSIMD& bids = orderbook_art_simd_.bids();
         
-        while (order->remaining_quantity > 0 && !bids.empty()) {
+        // Add safety counter to prevent infinite loops
+        const size_t max_iterations = 10000;
+        size_t iteration_count = 0;
+        
+        while (order->remaining_quantity > 0 && !bids.empty() && iteration_count < max_iterations) {
+            ++iteration_count;
+            
             // Use SIMD-optimized best price lookup
             Price best_bid = bids.best_price();
             
