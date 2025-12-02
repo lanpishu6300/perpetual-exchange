@@ -27,7 +27,7 @@ public:
     bool recover_from_wal();
     
     // Shutdown gracefully
-    void shutdown() override;
+    void shutdown();
     
     // Get WAL statistics
     struct WALStats {
