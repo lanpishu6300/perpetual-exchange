@@ -208,8 +208,11 @@ Order* OrderBookSide::best_order() const {
         return nullptr;
     }
     
+    // Optimized: traverse to leftmost node with prefetching
     Order* best = root_;
     while (best->left != sentinel_) {
+        // Prefetch next node for better cache performance
+        __builtin_prefetch(best->left, 0, 3);
         best = best->left;
     }
     return best;

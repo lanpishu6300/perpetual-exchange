@@ -63,7 +63,7 @@ std::vector<Trade> MatchingEngine::match_order(Order* order) {
         return trades;
     }
     
-    // Match against resting orders
+    // Match against resting orders (hot path optimization)
     while (order->remaining_quantity > 0 && !opposite_side->empty()) {
         Order* resting_order = opposite_side->best_order();
         
@@ -71,8 +71,11 @@ std::vector<Trade> MatchingEngine::match_order(Order* order) {
             break;
         }
         
-        // Determine trade quantity
-        Quantity trade_qty = std::min(order->remaining_quantity, resting_order->remaining_quantity);
+        // Determine trade quantity (use branchless min for better performance)
+        Quantity trade_qty = order->remaining_quantity;
+        if (resting_order->remaining_quantity < trade_qty) {
+            trade_qty = resting_order->remaining_quantity;
+        }
         
         // Get match price (price-time priority)
         Price match_price = get_match_price(order, resting_order);
