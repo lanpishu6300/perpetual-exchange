@@ -91,10 +91,11 @@ std::vector<Trade> ProductionMatchingEngine::process_order_production(Order* ord
     Metrics::getInstance().incrementCounter("orders_received");
     
     try {
-        // Validate order
-        if (!validateOrder(order)) {
+        // Enhanced validation using OrderValidator
+        auto validation_result = validateOrderEnhanced(order);
+        if (!validation_result.valid) {
             Metrics::getInstance().incrementCounter("orders_rejected_invalid");
-            throw InvalidOrderException("Order validation failed");
+            throw InvalidOrderException(validation_result.reason);
         }
         
         // Check rate limit
@@ -201,17 +202,45 @@ bool ProductionMatchingEngine::checkRateLimit(UserID user_id) {
 }
 
 bool ProductionMatchingEngine::checkBalance(UserID user_id, Price price, Quantity quantity) {
-    // Simplified - in production, would check actual account balance
-    // This is a placeholder
-    return true;
+    if (!account_manager_) {
+        return true; // Fallback if not initialized
+    }
+    
+    // Calculate required margin
+    double required_margin = account_manager_->calculateRequiredMargin(
+        price, quantity, default_leverage_);
+    
+    // Check if user has sufficient margin
+    return account_manager_->hasSufficientMargin(user_id, required_margin);
 }
 
 bool ProductionMatchingEngine::checkPositionLimit(UserID user_id, InstrumentID instrument_id, Quantity quantity) {
-    // Simplified - in production, would check position limits
-    // This is a placeholder
-    auto& config = Config::getInstance();
-    int64_t max_position = config.getInt(ConfigKeys::MAX_POSITION_SIZE, 1000000);
-    return true; // Placeholder
+    if (!position_manager_) {
+        return true; // Fallback if not initialized
+    }
+    
+    // Get current position size (simplified - would query actual position)
+    Quantity current_size = position_manager_->getPositionSize(user_id, instrument_id);
+    
+    // Check if new position would exceed limit
+    // For simplicity, we check absolute size
+    // In production, you'd check based on order side and current position
+    return position_manager_->checkPositionLimit(user_id, instrument_id, quantity, OrderSide::BUY);
+}
+
+OrderValidator::ValidationResult ProductionMatchingEngine::validateOrderEnhanced(const Order* order) const {
+    if (!order_validator_) {
+        // Fallback to basic validation
+        OrderValidator::ValidationResult result;
+        result.valid = validateOrder(order);
+        if (!result.valid) {
+            result.reason = "Basic validation failed";
+            result.error_code = ErrorCode::INVALID_ORDER;
+        }
+        return result;
+    }
+    
+    return order_validator_->validate(order);
 }
 
 HealthInfo ProductionMatchingEngine::getHealth() const {
