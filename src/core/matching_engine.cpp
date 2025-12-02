@@ -29,12 +29,31 @@ std::vector<Trade> MatchingEngine::process_order(Order* order) {
     // If order is not fully filled and is a limit order, add to book
     if (order->is_active() && order->order_type == OrderType::LIMIT) {
         if (order->remaining_quantity > 0) {
-            orderbook_.insert_order(order);
-            orders_[order->order_id] = std::unique_ptr<Order>(order);
-            user_orders_[order->user_id].push_back(order->order_id);
-            
-            if (order_update_callback_) {
-                order_update_callback_(order);
+            // Check if order already exists in orders_ map
+            auto it = orders_.find(order->order_id);
+            if (it == orders_.end()) {
+                // New order - insert into book and take ownership
+                if (orderbook_.insert_order(order)) {
+                    orders_[order->order_id] = std::unique_ptr<Order>(order);
+                    user_orders_[order->user_id].push_back(order->order_id);
+                    
+                    if (order_update_callback_) {
+                        order_update_callback_(order);
+                    }
+                }
+            } else {
+                // Order already exists in orders_ map
+                // Check if it's already in the orderbook by trying to find it
+                OrderBookSide& side = (order->side == OrderSide::BUY) ? 
+                    orderbook_.bids() : orderbook_.asks();
+                if (!side.find_order(order->order_id)) {
+                    // Order not in orderbook yet - insert it (e.g., after partial fill)
+                    orderbook_.insert_order(order);
+                }
+                
+                if (order_update_callback_) {
+                    order_update_callback_(order);
+                }
             }
         }
     }
@@ -111,6 +130,10 @@ std::vector<Trade> MatchingEngine::match_order(Order* order) {
             remove_order_from_book(resting_order);
             if (order_update_callback_) {
                 order_update_callback_(resting_order);
+            }
+            // After removing, check if we should break to prevent infinite loop
+            if (opposite_side->empty()) {
+                break;
             }
         }
         
