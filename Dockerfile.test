@@ -1,0 +1,40 @@
+# Dockerfile for comprehensive benchmark testing
+FROM --platform=linux/amd64 ubuntu:22.04 AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    g++ \
+    make \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy source files
+COPY CMakeLists.txt .
+COPY include/ include/
+COPY src/ src/
+
+# Build with optimizations
+RUN mkdir -p build && cd build && \
+    cmake .. \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CXX_FLAGS="-march=x86-64 -O3" \
+        -DCMAKE_CXX_STANDARD=17 && \
+    cmake --build . --config Release -j$(nproc) --target comprehensive_performance_comparison
+
+# Runtime stage
+FROM --platform=linux/amd64 ubuntu:22.04
+
+RUN apt-get update && apt-get install -y \
+    libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy benchmark binary
+COPY --from=builder /app/build/comprehensive_performance_comparison .
+
+# Run benchmark with 1000 orders (quick test)
+CMD ["./comprehensive_performance_comparison", "1000"]
