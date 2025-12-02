@@ -30,12 +30,36 @@ A production-ready perpetual futures exchange matching engine with nanosecond-le
 
 ## 📊 Performance
 
-### Benchmarks
+See [PERFORMANCE_BENCHMARK_REPORT.md](PERFORMANCE_BENCHMARK_REPORT.md) for detailed performance comparison.
 
-| Platform | Throughput | Latency | SIMD Acceleration |
-|----------|-----------|---------|------------------|
-| **ARM** | 278K orders/sec | 2.89 μs | N/A |
-| **x86_64** | ~290K orders/sec | ~2.70 μs | **2-4x** |
+### Performance Benchmarks
+
+**Key Optimizations**:
+- Memory pooling for efficient allocation
+- Lock-free data structures
+- SIMD optimizations (AVX2) - **2-4x acceleration**
+- ART (Adaptive Radix Tree) - **better cache locality**
+- NUMA awareness
+- Hot path optimizations
+
+**Performance Results** (vs Original):
+- **ART+SIMD**: +25-45% throughput, -35-55% latency ⭐
+- **Optimized V2**: +20-30% throughput, -20-30% latency
+- **ART**: +10-20% throughput, -15-25% latency
+- **Optimized**: +15-25% throughput, -10-20% latency
+
+### Running Benchmarks
+
+```bash
+# Quick test (10K orders)
+./run_benchmark.sh 10000
+
+# Full test (50K orders)
+./run_benchmark.sh 50000
+
+# Or run directly
+cd build && ./comprehensive_performance_comparison 10000
+```
 
 ### Persistence Performance
 
@@ -137,7 +161,12 @@ persistence.flush_interval_ms=100
 ### Run Benchmarks
 
 ```bash
+# Use the benchmark script
+./run_benchmark.sh 10000
+
+# Or run directly
 cd build
+./comprehensive_performance_comparison 10000  # All versions comparison
 ./quick_benchmark      # Quick test (10K orders)
 ./full_benchmark       # Full benchmark
 ./persistence_benchmark  # Persistence performance
@@ -145,8 +174,12 @@ cd build
 
 ### Performance Results
 
-- **Throughput**: 263K-290K orders/sec
-- **Average Latency**: 2.7-3.0 μs
+See [PERFORMANCE_BENCHMARK_REPORT.md](PERFORMANCE_BENCHMARK_REPORT.md) for detailed results.
+
+**Summary**:
+- **ART+SIMD**: 625-1160K orders/sec, 0.5-1.0 μs latency ⭐
+- **Optimized V2**: 600-1040K orders/sec, 0.8-1.4 μs latency
+- **Original**: 500-800K orders/sec, 1.2-2.0 μs latency
 - **SIMD Acceleration**: 2-4x on x86_64
 - **Persistence Throughput**: 360K+ records/sec
 
