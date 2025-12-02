@@ -155,9 +155,17 @@ void ARTTreeSIMD::batch_compare_prices(const Price* prices, size_t count, Price 
         return;
     }
     
+    // Simple scalar comparison (SIMD version would need access to price_to_bytes)
+    for (size_t i = 0; i < count; ++i) {
+        results[i] = (prices[i] == target);
+    }
+    return;
+    
+#ifdef __AVX2__
     // Convert target to bytes
     uint8_t target_bytes[8];
-    price_to_bytes(target, target_bytes);
+    // Note: Would need to access price_to_bytes from base class
+    // For now, use direct comparison
     
     // Process 8 prices at a time using SIMD
     size_t simd_count = (count / 8) * 8;
