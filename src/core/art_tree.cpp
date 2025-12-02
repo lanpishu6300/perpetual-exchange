@@ -310,7 +310,9 @@ Price ARTTree::predecessor(Price key) const {
 }
 
 int ARTTree::check_prefix(ARTNode* node, const uint8_t* key, int depth) const {
-    int max_cmp = std::min(node->prefix_len(), 8 - depth);
+    int prefix_len = static_cast<int>(node->prefix_len());
+    int remaining = 8 - depth;
+    int max_cmp = (prefix_len < remaining) ? prefix_len : remaining;
     for (int i = 0; i < max_cmp; ++i) {
         if (node->prefix()[i] != key[depth + i]) {
             return i;

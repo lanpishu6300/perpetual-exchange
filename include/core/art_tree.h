@@ -173,10 +173,6 @@ private:
 private:
     ARTNode* root_;
     size_t size_;
-    
-    // Memory pool for nodes (optional optimization)
-    static constexpr size_t POOL_SIZE = 1024;
-    std::vector<std::unique_ptr<ARTNode>> node_pool_;
 };
 
 } // namespace perpetual

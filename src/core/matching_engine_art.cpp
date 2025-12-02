@@ -15,7 +15,7 @@ MatchingEngineART::~MatchingEngineART() {
 }
 
 std::vector<Trade> MatchingEngineART::process_order_art(Order* order) {
-    if (!order || order->quantity <= 0) {
+    if (!order || order->remaining_quantity <= 0) {
         return {};
     }
     
@@ -27,7 +27,7 @@ std::vector<Trade> MatchingEngineART::process_order_art(Order* order) {
     std::vector<Trade> trades = match_order_art(order);
     
     // If order not fully filled, add to order book
-    if (order->quantity > 0 && order->type == OrderType::LIMIT) {
+    if (order->remaining_quantity > 0 && order->order_type == OrderType::LIMIT) {
         orderbook_art_.insert_order(order);
     }
     
@@ -41,7 +41,7 @@ std::vector<Trade> MatchingEngineART::match_order_art(Order* order) {
         // Match against asks
         OrderBookSideART& asks = orderbook_art_.asks();
         
-        while (order->quantity > 0 && !asks.empty()) {
+        while (order->remaining_quantity > 0 && !asks.empty()) {
             Price best_ask = asks.best_price();
             if (best_ask == 0 || order->price < best_ask) {
                 break;  // Cannot match
@@ -54,27 +54,28 @@ std::vector<Trade> MatchingEngineART::match_order_art(Order* order) {
             
             Order* maker = level->first_order;
             Price trade_price = maker->price;  // Price-time priority
-            Quantity trade_qty = std::min(order->quantity, maker->quantity);
+            Quantity trade_qty = std::min(order->remaining_quantity, maker->remaining_quantity);
             
             execute_trade_art(order, maker, trade_price, trade_qty);
             
             Trade trade;
-            trade.trade_id = ++trade_sequence_;
+            trade.buy_order_id = order->order_id;
+            trade.sell_order_id = maker->order_id;
+            trade.buy_user_id = order->user_id;
+            trade.sell_user_id = maker->user_id;
             trade.instrument_id = order->instrument_id;
             trade.price = trade_price;
             trade.quantity = trade_qty;
-            trade.taker_order_id = order->order_id;
-            trade.maker_order_id = maker->order_id;
-            trade.taker_user_id = order->user_id;
-            trade.maker_user_id = maker->user_id;
             trade.timestamp = get_current_timestamp();
+            trade.sequence_id = ++trade_sequence_;
+            trade.is_taker_buy = true;
             trades.push_back(trade);
             
             total_trades_++;
             total_volume_ += quantity_to_double(trade_qty);
             
             // Remove maker if fully filled
-            if (maker->quantity == 0) {
+            if (maker->remaining_quantity == 0) {
                 orderbook_art_.remove_order(maker);
             }
         }
@@ -82,7 +83,7 @@ std::vector<Trade> MatchingEngineART::match_order_art(Order* order) {
         // Match against bids
         OrderBookSideART& bids = orderbook_art_.bids();
         
-        while (order->quantity > 0 && !bids.empty()) {
+        while (order->remaining_quantity > 0 && !bids.empty()) {
             Price best_bid = bids.best_price();
             if (best_bid == 0 || order->price > best_bid) {
                 break;  // Cannot match
@@ -95,27 +96,28 @@ std::vector<Trade> MatchingEngineART::match_order_art(Order* order) {
             
             Order* maker = level->first_order;
             Price trade_price = maker->price;  // Price-time priority
-            Quantity trade_qty = std::min(order->quantity, maker->quantity);
+            Quantity trade_qty = std::min(order->remaining_quantity, maker->remaining_quantity);
             
             execute_trade_art(order, maker, trade_price, trade_qty);
             
             Trade trade;
-            trade.trade_id = ++trade_sequence_;
+            trade.buy_order_id = order->order_id;
+            trade.sell_order_id = maker->order_id;
+            trade.buy_user_id = order->user_id;
+            trade.sell_user_id = maker->user_id;
             trade.instrument_id = order->instrument_id;
             trade.price = trade_price;
             trade.quantity = trade_qty;
-            trade.taker_order_id = order->order_id;
-            trade.maker_order_id = maker->order_id;
-            trade.taker_user_id = order->user_id;
-            trade.maker_user_id = maker->user_id;
             trade.timestamp = get_current_timestamp();
+            trade.sequence_id = ++trade_sequence_;
+            trade.is_taker_buy = true;
             trades.push_back(trade);
             
             total_trades_++;
             total_volume_ += quantity_to_double(trade_qty);
             
             // Remove maker if fully filled
-            if (maker->quantity == 0) {
+            if (maker->remaining_quantity == 0) {
                 orderbook_art_.remove_order(maker);
             }
         }
@@ -125,16 +127,18 @@ std::vector<Trade> MatchingEngineART::match_order_art(Order* order) {
 }
 
 void MatchingEngineART::execute_trade_art(Order* taker, Order* maker, Price price, Quantity quantity) {
-    taker->quantity -= quantity;
-    maker->quantity -= quantity;
+    taker->remaining_quantity -= quantity;
+    taker->filled_quantity += quantity;
+    maker->remaining_quantity -= quantity;
+    maker->filled_quantity += quantity;
     
-    if (taker->quantity == 0) {
+    if (taker->remaining_quantity == 0) {
         taker->status = OrderStatus::FILLED;
     } else {
         taker->status = OrderStatus::PARTIAL_FILLED;
     }
     
-    if (maker->quantity == 0) {
+    if (maker->remaining_quantity == 0) {
         maker->status = OrderStatus::FILLED;
     } else {
         maker->status = OrderStatus::PARTIAL_FILLED;
