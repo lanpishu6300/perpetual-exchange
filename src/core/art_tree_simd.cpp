@@ -202,7 +202,22 @@ void* ARTTreeSIMD::find_simd(Price key) const {
 }
 
 int ARTTreeSIMD::check_prefix_simd(ARTNode* node, const uint8_t* key, int depth) const {
-    return check_prefix(node, key, depth);
+    uint8_t prefix_len = node->prefix_len();
+    if (prefix_len == 0) {
+        return 0;
+    }
+    
+    const uint8_t* prefix = node->prefix();
+    int remaining = 8 - depth;
+    int max_cmp = (prefix_len < remaining) ? prefix_len : remaining;
+    
+    // Scalar fallback
+    for (int i = 0; i < max_cmp; ++i) {
+        if (prefix[i] != key[depth + i]) {
+            return i;
+        }
+    }
+    return max_cmp;
 }
 
 ARTNode* ARTTreeSIMD::find_child_simd_node16(ARTNode16* node, uint8_t byte) const {
