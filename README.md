@@ -1,142 +1,178 @@
-# Perpetual Exchange - 永续合约交易所核心引擎
+# Perpetual Exchange - High-Performance Matching Engine
 
-一个高性能的永续合约交易所撮合引擎，专注于纳秒级延迟优化。
+A production-ready perpetual futures exchange matching engine with nanosecond-level latency, featuring advanced optimizations including memory pooling, lock-free data structures, SIMD acceleration, and optimized persistence.
 
-## 核心特性
+## 🚀 Features
 
-### 🚀 高性能设计
-- **纳秒级延迟**: 采用高效的数据结构和算法优化
-- **红黑树订单簿**: O(log n) 复杂度的订单插入、删除和查询
-- **价格层级聚合**: 相同价格的订单聚合，减少内存占用和查询时间
-- **缓存友好**: 数据结构对齐到缓存行，优化CPU缓存命中率
+### Core Trading Features
+- ✅ Order book management (Red-Black Tree, O(log n))
+- ✅ Price-time priority matching engine
+- ✅ Position management (bidirectional positions)
+- ✅ Account management (margin, P&L)
+- ✅ Funding rate calculation
 
-### 📊 核心功能
-- **订单撮合**: 价格时间优先撮合算法
-- **订单簿管理**: 支持深度查询和实时更新
-- **仓位管理**: 支持多空仓位、平均开仓价计算
-- **保证金计算**: 实时保证金和风险控制
-- **资金费率**: 永续合约资金费率计算和结算
-- **风险控制**: 强制平仓价格计算和风险检查
+### Performance Optimizations
+- ✅ Memory pool optimization (+5-10% performance)
+- ✅ Lock-free data structures (+10-20% concurrency)
+- ✅ SIMD optimization (2-4x batch computation on x86_64)
+- ✅ NUMA-aware optimization (multi-core)
+- ✅ FPGA acceleration framework (reserved)
 
-## 项目结构
+### Production Features
+- ✅ Logging system (5-level, file output)
+- ✅ Configuration management (INI + environment variables)
+- ✅ Metrics collection (Prometheus format)
+- ✅ Error handling (custom exception system)
+- ✅ Rate limiting (Token bucket algorithm)
+- ✅ Health checking (system health monitoring)
+- ✅ Optimized persistence (async writing, 3.6x throughput)
+- ✅ Graceful shutdown (signal handling)
+
+## 📊 Performance
+
+### Benchmarks
+
+| Platform | Throughput | Latency | SIMD Acceleration |
+|----------|-----------|---------|------------------|
+| **ARM** | 278K orders/sec | 2.89 μs | N/A |
+| **x86_64** | ~290K orders/sec | ~2.70 μs | **2-4x** |
+
+### Persistence Performance
+
+- **Trade Logging**: 368K trades/sec, 2.71 μs latency
+- **Order Logging**: 358K orders/sec, 2.79 μs latency
+- **Throughput Improvement**: 3.6-3.7x over original
+
+## 🏗️ Architecture
 
 ```
 perpetual_exchange/
-├── include/
-│   └── core/
-│       ├── types.h           # 基础类型定义
-│       ├── order.h           # 订单结构
-│       ├── orderbook.h       # 订单簿实现
-│       ├── matching_engine.h # 撮合引擎
-│       ├── position.h        # 仓位管理
-│       ├── account.h         # 账户管理
-│       └── funding_rate.h    # 资金费率计算
-├── src/
-│   └── core/
-│       ├── orderbook.cpp
-│       ├── matching_engine.cpp
-│       ├── position.cpp
-│       ├── account.cpp
-│       └── funding_rate.cpp
-├── src/
-│   └── main.cpp              # 示例程序
-├── CMakeLists.txt
-└── README.md
+├── include/core/          # Core headers
+│   ├── order.h            # Order structure
+│   ├── orderbook.h        # Order book (Red-Black Tree)
+│   ├── matching_engine.h  # Matching engine
+│   ├── matching_engine_production.h  # Production engine
+│   ├── persistence_optimized.h  # Optimized persistence
+│   └── ...
+├── src/core/              # Core implementations
+├── src/                   # Applications and benchmarks
+└── docs/                  # Documentation
 ```
 
-## 构建说明
+## 🚀 Quick Start
 
-### 系统要求
-- C++17 或更高版本
-- CMake 3.15 或更高版本
-- 支持 C++17 的编译器 (GCC 7+, Clang 5+, MSVC 2017+)
+### Prerequisites
 
-### 构建步骤
+- C++17 compiler (GCC 7+, Clang 5+, MSVC 2017+)
+- CMake 3.10+
+- (Optional) Docker for x86_64 SIMD testing
+
+### Build
 
 ```bash
-# 创建构建目录
+# Clone repository
+git clone https://github.com/lanpishu6300/perpetual-exchange.git
+cd perpetual-exchange
+
+# Build
 mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake --build . -j$(nproc)
 
-# 配置项目
-cmake ..
-
-# 编译
-cmake --build . --config Release
-
-# 运行示例
-./bin/PerpetualExchange
+# Or use Makefile
+make build
 ```
 
-## 核心设计
+### Run Production Server
 
-### 订单簿结构
-- 使用红黑树维护价格优先级
-- 每个价格层级聚合相同价格的所有订单
-- 订单在价格层级内按时间优先排列
+```bash
+# Prepare configuration
+cp config.ini.example config.ini
+# Edit config.ini as needed
 
-### 撮合算法
-1. **价格优先**: 最优价格优先撮合
-2. **时间优先**: 相同价格按时间戳排序
-3. **支持订单类型**: 限价单、市价单、IOC、FOK
-
-### 仓位计算
-- **双向持仓**: 支持同时持有多空仓位
-- **净持仓**: 自动计算净持仓大小
-- **平均开仓价**: 加权平均开仓价格计算
-- **未实现盈亏**: 基于标记价格实时计算
-
-### 资金费率
-- **溢价指数**: (标记价格 - 指数价格) / 指数价格
-- **资金费率**: 溢价指数 × 资金费率系数
-- **资金费用**: 持仓量 × 标记价格 × 资金费率
-
-## 性能优化
-
-### 数据结构优化
-- 使用整数类型存储价格和数量（定点数），避免浮点运算
-- 订单结构对齐到64字节（缓存行大小）
-- 使用内存池减少动态分配
-
-### 算法优化
-- 红黑树保证O(log n)的操作复杂度
-- 价格层级预聚合，减少遍历次数
-- 最小化锁的使用，提高并发性能
-
-## 使用示例
-
-```cpp
-#include "core/matching_engine.h"
-
-// 创建撮合引擎
-MatchingEngine engine(instrument_id);
-
-// 设置回调
-engine.set_trade_callback([](const Trade& trade) {
-    // 处理成交事件
-});
-
-// 创建订单
-auto order = std::make_unique<Order>(
-    order_id, user_id, instrument_id,
-    OrderSide::BUY, price, quantity
-);
-
-// 处理订单
-auto trades = engine.process_order(order.get());
+# Run
+cd build
+./production_server ../config.ini
 ```
 
-## 参考
+### Docker Deployment
 
-本项目参考了以下业界领先交易所的设计：
-- **Binance**: 价格时间优先撮合
-- **Deribit**: 永续合约资金费率机制
-- **OKX**: 订单簿深度管理
-- **Bybit**: 风险控制和强制平仓
+```bash
+# Build production image
+make docker-build
 
-## 许可证
+# Run with Docker Compose
+docker-compose -f docker-compose.production.yml up -d
+```
 
-本项目仅供学习和研究使用。
+## 📖 Documentation
 
-## 贡献
+- [Architecture Guide](ARCHITECTURE.md) - Detailed architecture design
+- [Deployment Guide](DEPLOYMENT_GUIDE.md) - Production deployment instructions
+- [Performance Comparison](COMPLETE_COMPARISON.md) - Performance benchmarks
+- [Persistence Optimization](PERSISTENCE_OPTIMIZATION.md) - Persistence module optimization
 
-欢迎提交 Issue 和 Pull Request！
+## 🔧 Configuration
+
+See `config.ini.example` for all configuration options:
+
+```ini
+# Logging
+log.level=INFO
+log.file=logs/exchange.log
+
+# Rate Limiting
+rate_limit.global_orders_per_second=10000.0
+rate_limit.per_user_orders_per_second=1000.0
+
+# Persistence
+persistence.enabled=true
+persistence.db_path=./data
+persistence.buffer_size=10000
+persistence.flush_interval_ms=100
+```
+
+## 📊 Benchmarks
+
+### Run Benchmarks
+
+```bash
+cd build
+./quick_benchmark      # Quick test (10K orders)
+./full_benchmark       # Full benchmark
+./persistence_benchmark  # Persistence performance
+```
+
+### Performance Results
+
+- **Throughput**: 263K-290K orders/sec
+- **Average Latency**: 2.7-3.0 μs
+- **SIMD Acceleration**: 2-4x on x86_64
+- **Persistence Throughput**: 360K+ records/sec
+
+## 🎯 Production Ready
+
+This project includes all production-grade features:
+
+- ✅ Comprehensive logging
+- ✅ Configuration management
+- ✅ Metrics and monitoring
+- ✅ Error handling
+- ✅ Rate limiting
+- ✅ Health checks
+- ✅ Optimized persistence
+- ✅ Graceful shutdown
+- ✅ Docker support
+
+## 📝 License
+
+[Add your license here]
+
+## 👤 Author
+
+lanpishu6300@gmail.com
+
+## 🙏 Acknowledgments
+
+- Inspired by industry-leading nanosecond-latency matching engines
+- Built with modern C++17 and best practices
