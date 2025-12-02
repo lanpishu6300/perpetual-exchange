@@ -3,6 +3,7 @@
 #include "core/matching_engine_optimized_v2.h"
 #include "core/matching_engine_production.h"
 #include "core/matching_engine_art.h"
+#include "core/matching_engine_art_simd.h"
 #include "core/types.h"
 #include <iostream>
 #include <chrono>
@@ -198,6 +199,32 @@ public:
         return calculateResults("ART", latencies, total_trades, num_orders, warmup, start);
     }
     
+    BenchmarkResult benchmark_art_simd(size_t num_orders, InstrumentID instrument_id) {
+        MatchingEngineARTSIMD engine(instrument_id);
+        auto orders = generateOrders(num_orders, instrument_id);
+        const size_t warmup = std::min<size_t>(1000, num_orders / 10);
+        
+        for (size_t i = 0; i < warmup; ++i) {
+            engine.process_order_art_simd(orders[i].get());
+        }
+        
+        std::vector<nanoseconds> latencies;
+        latencies.reserve(num_orders - warmup);
+        uint64_t total_trades = 0;
+        auto start = high_resolution_clock::now();
+        
+        for (size_t i = warmup; i < num_orders; ++i) {
+            auto order_start = high_resolution_clock::now();
+            auto trades = engine.process_order_art_simd(orders[i].get());
+            auto order_end = high_resolution_clock::now();
+            
+            latencies.push_back(duration_cast<nanoseconds>(order_end - order_start));
+            total_trades += trades.size();
+        }
+        
+        return calculateResults("ART+SIMD", latencies, total_trades, num_orders, warmup, start);
+    }
+    
     BenchmarkResult benchmark_production(size_t num_orders, InstrumentID instrument_id) {
         ProductionMatchingEngine engine(instrument_id);
         engine.initialize(""); // Initialize with defaults
@@ -352,14 +379,14 @@ int main() {
     std::vector<BenchmarkResult> results;
     
     // Test Original Version
-    std::cout << "[1/5] Testing Original Version (Red-Black Tree)...\n";
+    std::cout << "[1/6] Testing Original Version (Red-Black Tree)...\n";
     auto result1 = comparator.benchmark_original(num_orders, instrument_id);
     results.push_back(result1);
     std::cout << "  Throughput: " << result1.throughput / 1000.0 << " K orders/sec\n";
     std::cout << "  Avg Latency: " << result1.avg_latency.count() / 1000.0 << " μs\n";
     
     // Test Optimized Version
-    std::cout << "\n[2/5] Testing Optimized Version (Memory Pool + Lock-Free)...\n";
+    std::cout << "\n[2/6] Testing Optimized Version (Memory Pool + Lock-Free)...\n";
     auto result2 = comparator.benchmark_optimized(num_orders, instrument_id);
     results.push_back(result2);
     std::cout << "  Throughput: " << result2.throughput / 1000.0 << " K orders/sec\n";
@@ -368,7 +395,7 @@ int main() {
     std::cout << "  Improvement: +" << improvement2 << "%\n";
     
     // Test Optimized V2 Version
-    std::cout << "\n[3/5] Testing Optimized V2 Version (Hot Path)...\n";
+    std::cout << "\n[3/6] Testing Optimized V2 Version (Hot Path)...\n";
     auto result3 = comparator.benchmark_optimized_v2(num_orders, instrument_id);
     results.push_back(result3);
     std::cout << "  Throughput: " << result3.throughput / 1000.0 << " K orders/sec\n";
@@ -377,7 +404,7 @@ int main() {
     std::cout << "  Improvement: +" << improvement3 << "%\n";
     
     // Test ART Version
-    std::cout << "\n[4/5] Testing ART Version (Adaptive Radix Tree)...\n";
+    std::cout << "\n[4/6] Testing ART Version (Adaptive Radix Tree)...\n";
     auto result_art = comparator.benchmark_art(num_orders, instrument_id);
     results.push_back(result_art);
     std::cout << "  Throughput: " << result_art.throughput / 1000.0 << " K orders/sec\n";
@@ -385,8 +412,17 @@ int main() {
     double improvement_art = ((result_art.throughput - result1.throughput) / result1.throughput) * 100.0;
     std::cout << "  Improvement: +" << improvement_art << "%\n";
     
+    // Test ART+SIMD Version
+    std::cout << "\n[5/6] Testing ART+SIMD Version (ART + SIMD Optimizations)...\n";
+    auto result_art_simd = comparator.benchmark_art_simd(num_orders, instrument_id);
+    results.push_back(result_art_simd);
+    std::cout << "  Throughput: " << result_art_simd.throughput / 1000.0 << " K orders/sec\n";
+    std::cout << "  Avg Latency: " << result_art_simd.avg_latency.count() / 1000.0 << " μs\n";
+    double improvement_art_simd = ((result_art_simd.throughput - result1.throughput) / result1.throughput) * 100.0;
+    std::cout << "  Improvement: +" << improvement_art_simd << "%\n";
+    
     // Test Production Version
-    std::cout << "\n[5/5] Testing Production Version (Full Features)...\n";
+    std::cout << "\n[6/6] Testing Production Version (Full Features)...\n";
     auto result4 = comparator.benchmark_production(num_orders, instrument_id);
     results.push_back(result4);
     std::cout << "  Throughput: " << result4.throughput / 1000.0 << " K orders/sec\n";
