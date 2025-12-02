@@ -58,7 +58,7 @@ public:
     size_t price_levels() const { return price_levels_.size(); }
     
     // Check if empty
-    bool empty() const { return root_ == nullptr; }
+    bool empty() const;
     
     // Get top N price levels for market data
     void get_depth(size_t n, std::vector<PriceLevel>& levels) const;
