@@ -16,10 +16,6 @@ std::vector<Trade> MatchingEngineARTSIMD::process_order_art_simd(Order* order) {
         return {};
     }
     
-    // Store order
-    orders_[order->order_id] = std::unique_ptr<Order>(order);
-    user_orders_[order->user_id].push_back(order->order_id);
-    
     // Match order using SIMD-optimized ART
     std::vector<Trade> trades = match_order_art_simd(order);
     
@@ -54,7 +50,23 @@ std::vector<Trade> MatchingEngineARTSIMD::match_order_art_simd(Order* order) {
             Price trade_price = maker->price;  // Price-time priority
             Quantity trade_qty = std::min(order->remaining_quantity, maker->remaining_quantity);
             
-            execute_trade_art(order, maker, trade_price, trade_qty);
+            // Execute trade
+            order->remaining_quantity -= trade_qty;
+            order->filled_quantity += trade_qty;
+            maker->remaining_quantity -= trade_qty;
+            maker->filled_quantity += trade_qty;
+            
+            if (order->remaining_quantity == 0) {
+                order->status = OrderStatus::FILLED;
+            } else {
+                order->status = OrderStatus::PARTIAL_FILLED;
+            }
+            
+            if (maker->remaining_quantity == 0) {
+                maker->status = OrderStatus::FILLED;
+            } else {
+                maker->status = OrderStatus::PARTIAL_FILLED;
+            }
             
             Trade trade;
             trade.buy_order_id = order->order_id;
@@ -65,12 +77,9 @@ std::vector<Trade> MatchingEngineARTSIMD::match_order_art_simd(Order* order) {
             trade.price = trade_price;
             trade.quantity = trade_qty;
             trade.timestamp = get_current_timestamp();
-            trade.sequence_id = ++trade_sequence_;
+            trade.sequence_id = get_current_timestamp();  // Use timestamp as sequence
             trade.is_taker_buy = true;
             trades.push_back(trade);
-            
-            total_trades_++;
-            total_volume_ += quantity_to_double(trade_qty);
             
             // Remove maker if fully filled
             if (maker->remaining_quantity == 0) {
@@ -97,7 +106,23 @@ std::vector<Trade> MatchingEngineARTSIMD::match_order_art_simd(Order* order) {
             Price trade_price = maker->price;  // Price-time priority
             Quantity trade_qty = std::min(order->remaining_quantity, maker->remaining_quantity);
             
-            execute_trade_art(order, maker, trade_price, trade_qty);
+            // Execute trade
+            order->remaining_quantity -= trade_qty;
+            order->filled_quantity += trade_qty;
+            maker->remaining_quantity -= trade_qty;
+            maker->filled_quantity += trade_qty;
+            
+            if (order->remaining_quantity == 0) {
+                order->status = OrderStatus::FILLED;
+            } else {
+                order->status = OrderStatus::PARTIAL_FILLED;
+            }
+            
+            if (maker->remaining_quantity == 0) {
+                maker->status = OrderStatus::FILLED;
+            } else {
+                maker->status = OrderStatus::PARTIAL_FILLED;
+            }
             
             Trade trade;
             trade.buy_order_id = maker->order_id;
@@ -108,12 +133,9 @@ std::vector<Trade> MatchingEngineARTSIMD::match_order_art_simd(Order* order) {
             trade.price = trade_price;
             trade.quantity = trade_qty;
             trade.timestamp = get_current_timestamp();
-            trade.sequence_id = ++trade_sequence_;
+            trade.sequence_id = get_current_timestamp();  // Use timestamp as sequence
             trade.is_taker_buy = false;
             trades.push_back(trade);
-            
-            total_trades_++;
-            total_volume_ += quantity_to_double(trade_qty);
             
             // Remove maker if fully filled
             if (maker->remaining_quantity == 0) {
