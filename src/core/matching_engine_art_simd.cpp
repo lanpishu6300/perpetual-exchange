@@ -36,7 +36,7 @@ std::vector<Trade> MatchingEngineARTSIMD::match_order_art_simd(Order* order) {
         
         while (order->remaining_quantity > 0 && !asks.empty()) {
             // Use SIMD-optimized best price lookup
-            Price best_ask = asks.best_price_simd();
+            Price best_ask = asks.best_price();
             if (best_ask == 0 || order->price < best_ask) {
                 break;  // Cannot match
             }
