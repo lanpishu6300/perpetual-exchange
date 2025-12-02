@@ -103,7 +103,7 @@ Quantity OrderBookSideARTSIMD::best_quantity() const {
 }
 
 Order* OrderBookSideARTSIMD::best_order() const {
-    Price price = best_price();
+    Price price = best_price_simd();
     if (price == 0) {
         return nullptr;
     }
@@ -116,7 +116,7 @@ Order* OrderBookSideARTSIMD::best_order() const {
 }
 
 PriceLevel* OrderBookSideARTSIMD::best_level() const {
-    Price price = best_price();
+    Price price = best_price_simd();
     if (price == 0) {
         return nullptr;
     }
