@@ -1,4 +1,5 @@
 #include "core/matching_engine_art_simd.h"
+#include "core/art_tree_simd_enhanced.h"
 #include <algorithm>
 
 namespace perpetual {
@@ -37,7 +38,9 @@ std::vector<Trade> MatchingEngineARTSIMD::match_order_art_simd(Order* order) {
         while (order->remaining_quantity > 0 && !asks.empty()) {
             // Use SIMD-optimized best price lookup
             Price best_ask = asks.best_price();
-            if (best_ask == 0 || order->price < best_ask) {
+            
+            // Use SIMD-optimized price comparison
+            if (best_ask == 0 || !ARTTreeSIMDEnhanced::can_match_price(order->price, best_ask, true)) {
                 break;  // Cannot match
             }
             
@@ -93,7 +96,9 @@ std::vector<Trade> MatchingEngineARTSIMD::match_order_art_simd(Order* order) {
         while (order->remaining_quantity > 0 && !bids.empty()) {
             // Use SIMD-optimized best price lookup
             Price best_bid = bids.best_price();
-            if (best_bid == 0 || order->price > best_bid) {
+            
+            // Use SIMD-optimized price comparison
+            if (best_bid == 0 || !ARTTreeSIMDEnhanced::can_match_price(order->price, best_bid, false)) {
                 break;  // Cannot match
             }
             

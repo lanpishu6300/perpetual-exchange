@@ -45,6 +45,7 @@ int ARTTreeSIMD::check_prefix_avx2(ARTNode* node, const uint8_t* key, int depth)
     int remaining = 8 - depth;
     int max_cmp = (prefix_len < remaining) ? prefix_len : remaining;
     
+#ifdef __AVX2__
     // Use AVX2 for 8-byte comparison
     if (max_cmp >= 8) {
         __m128i prefix_vec = _mm_loadu_si128(reinterpret_cast<const __m128i*>(prefix));
@@ -58,11 +59,12 @@ int ARTTreeSIMD::check_prefix_avx2(ARTNode* node, const uint8_t* key, int depth)
             return 8;  // All match
         }
         
-        // Find first zero bit (mismatch)
+        // Find first zero bit (mismatch) - optimized with bit manipulation
         return __builtin_ctz(~mask);
     }
+#endif
     
-    // Fallback to scalar
+    // Fallback to scalar for short prefixes
     for (int i = 0; i < max_cmp; ++i) {
         if (prefix[i] != key[depth + i]) {
             return i;
@@ -100,6 +102,7 @@ int ARTTreeSIMD::find_child_index_simd_node16(const uint8_t* keys, uint8_t count
         return -1;
     }
     
+#ifdef __AVX2__
     // Use SIMD to compare all keys at once
     __m128i keys_vec = _mm_loadu_si128(reinterpret_cast<const __m128i*>(keys));
     __m128i byte_vec = _mm_set1_epi8(byte);
@@ -110,11 +113,19 @@ int ARTTreeSIMD::find_child_index_simd_node16(const uint8_t* keys, uint8_t count
         return -1;  // Not found
     }
     
-    // Find first match
+    // Find first match using bit manipulation
     int index = __builtin_ctz(mask);
     if (index < count) {
         return index;
     }
+#else
+    // Scalar fallback
+    for (int i = 0; i < count; ++i) {
+        if (keys[i] == byte) {
+            return i;
+        }
+    }
+#endif
     
     return -1;
 }
