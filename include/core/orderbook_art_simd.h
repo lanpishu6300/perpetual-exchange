@@ -16,14 +16,58 @@ public:
     OrderBookSideARTSIMD(bool is_buy);
     ~OrderBookSideARTSIMD();
     
-    // SIMD-optimized best price lookup
-    Price best_price_simd() const;
+    // Insert order
+    bool insert(Order* order);
     
-    // SIMD-optimized batch price level lookup
-    void get_best_prices_simd(size_t n, std::vector<Price>& prices) const;
+    // Remove order
+    bool remove(Order* order);
+    
+    // Update order quantity
+    bool update_quantity(Order* order, Quantity new_quantity);
+    
+    // Get best price (SIMD optimized)
+    Price best_price() const;
+    
+    // Get total quantity at best price
+    Quantity best_quantity() const;
+    
+    // Get best order
+    Order* best_order() const;
+    
+    // Get price level at best price
+    PriceLevel* best_level() const;
+    
+    // Find order by order_id
+    Order* find_order(OrderID order_id) const;
+    
+    // Get total number of orders
+    size_t size() const { return order_map_.size(); }
+    
+    // Get total number of price levels
+    size_t price_levels() const { return price_levels_.size(); }
+    
+    // Check if empty
+    bool empty() const { return art_tree_simd_.empty(); }
+    
+    // Get top N price levels
+    void get_depth(size_t n, std::vector<PriceLevel>& levels) const;
     
 private:
+    // Price level management
+    PriceLevel* get_or_create_price_level(Price price);
+    void remove_price_level_if_empty(Price price);
+    void add_order_to_price_level(PriceLevel* level, Order* order);
+    void remove_order_from_price_level(PriceLevel* level, Order* order);
+    
+    // Price comparison
+    bool price_better(Price a, Price b) const;
+    
+private:
+    bool is_buy_;
     ARTTreeSIMD art_tree_simd_;
+    std::unordered_map<OrderID, Order*> order_map_;
+    std::unordered_map<Price, PriceLevel> price_levels_;
+    mutable std::mutex mutex_;
 };
 
 // Full order book using ART with SIMD
@@ -74,4 +118,3 @@ private:
 };
 
 } // namespace perpetual
-
