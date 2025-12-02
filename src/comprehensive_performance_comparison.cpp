@@ -122,8 +122,11 @@ public:
         
         // Latency statistics
         std::sort(latencies.begin(), latencies.end());
-        result.avg_latency = nanoseconds(
-            std::accumulate(latencies.begin(), latencies.end(), 0LL) / latencies.size());
+        nanoseconds total_latency{0};
+        for (const auto& lat : latencies) {
+            total_latency += lat;
+        }
+        result.avg_latency = nanoseconds(total_latency.count() / latencies.size());
         result.min_latency = latencies.front();
         result.max_latency = latencies.back();
         result.p50_latency = latencies[latencies.size() * 0.5];
@@ -350,8 +353,11 @@ int main() {
     result4.trade_rate = (total_trades * 100.0) / (num_orders - warmup);
     
     std::sort(latencies.begin(), latencies.end());
-    result4.avg_latency = nanoseconds(
-        std::accumulate(latencies.begin(), latencies.end(), 0LL) / latencies.size());
+    nanoseconds total_latency{0};
+    for (const auto& lat : latencies) {
+        total_latency += lat;
+    }
+    result4.avg_latency = nanoseconds(total_latency.count() / latencies.size());
     result4.min_latency = latencies.front();
     result4.max_latency = latencies.back();
     result4.p50_latency = latencies[latencies.size() * 0.5];
