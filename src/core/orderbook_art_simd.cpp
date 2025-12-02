@@ -1,4 +1,5 @@
 #include "core/orderbook_art_simd.h"
+#include "core/art_tree_simd_enhanced.h"
 #include <algorithm>
 
 namespace perpetual {
@@ -152,12 +153,14 @@ void OrderBookSideARTSIMD::get_depth(size_t n, std::vector<PriceLevel>& levels) 
     
     // Sort based on buy/sell
     if (is_buy_) {
-        std::sort(prices.rbegin(), prices.rend());  // Descending for bids
+        // Descending for bids (highest first)
+        std::sort(prices.rbegin(), prices.rend());
     } else {
-        std::sort(prices.begin(), prices.end());  // Ascending for asks
+        // Ascending for asks (lowest first)
+        std::sort(prices.begin(), prices.end());
     }
     
-    // Get top N
+    // Get top N - optimized with SIMD quantity aggregation if needed
     size_t count = std::min(n, prices.size());
     for (size_t i = 0; i < count; ++i) {
         auto it = price_levels_.find(prices[i]);
