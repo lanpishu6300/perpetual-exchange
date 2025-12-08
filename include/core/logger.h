@@ -60,3 +60,5 @@ private:
 #define LOG_CRITICAL(msg) perpetual::Logger::getInstance().critical(msg)
 
 } // namespace perpetual
+
+

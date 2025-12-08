@@ -45,3 +45,5 @@ HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
 
 # Run production server
 CMD ["./production_server", "config.ini"]
+
+

@@ -51,3 +51,5 @@ void ARTTreeSIMDEnhanced::get_top_prices(size_t n, bool ascending, std::vector<P
 
 } // namespace perpetual
 
+
+

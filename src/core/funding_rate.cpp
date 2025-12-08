@@ -56,3 +56,5 @@ int64_t FundingRateCalculator::calculate_funding_fee(Quantity position_size, Pri
 }
 
 } // namespace perpetual
+
+

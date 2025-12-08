@@ -39,3 +39,5 @@ COPY --from=builder /app/build/quick_comparison .
 COPY --from=builder /app/build/simd_benchmark .
 
 CMD ["./simd_benchmark"]
+
+

@@ -17,3 +17,5 @@ echo "  docker run --rm --platform linux/amd64 perpetual-exchange:simd"
 echo ""
 echo "Or use docker-compose:"
 echo "  docker-compose up"
+
+
