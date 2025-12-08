@@ -121,3 +121,5 @@ template<typename T>
 thread_local std::unique_ptr<MemoryPool<T>> ThreadLocalMemoryPool<T>::pool_;
 
 } // namespace perpetual
+
+

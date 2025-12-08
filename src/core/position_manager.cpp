@@ -56,3 +56,5 @@ Quantity PositionManager::calculateNewPositionSize(UserID user_id, InstrumentID 
 }
 
 } // namespace perpetual
+
+

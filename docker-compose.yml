@@ -15,3 +15,5 @@ services:
       - ./results:/app/results
     environment:
       - SIMD_ENABLED=1
+
+

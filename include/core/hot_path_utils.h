@@ -63,3 +63,5 @@ inline Quantity calculate_trade_quantity(Quantity order_qty, Quantity resting_qt
 
 } // namespace perpetual
 
+
+

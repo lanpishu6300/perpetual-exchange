@@ -1,0 +1,15 @@
+services:
+  event_sourcing_benchmark:
+    build:
+      context: .
+      dockerfile: Dockerfile.event_sourcing
+    platform: linux/amd64
+    volumes:
+      - ./results:/app/results
+      - ./benchmark_data:/app/benchmark_data
+    environment:
+      - NUM_ORDERS=10000
+    command: ["./run_event_sourcing_benchmark.sh", "10000"]
+    # Uncomment to override command
+    # command: ["bash", "-c", "./run_event_sourcing_benchmark.sh 50000 && python3 generate_performance_report.py results/benchmark_* EVENT_SOURCING_DOCKER_PERFORMANCE_REPORT.md"]
+
