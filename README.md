@@ -5,11 +5,24 @@ A production-ready perpetual futures exchange matching engine with nanosecond-le
 ## 🚀 Features
 
 ### Core Trading Features
-- ✅ Order book management (Red-Black Tree, O(log n))
-- ✅ Price-time priority matching engine
+- ✅ Order book management (Red-Black Tree, ART, O(log n))
+- ✅ Price-time priority matching engine (nanosecond latency)
 - ✅ Position management (bidirectional positions)
 - ✅ Account management (margin, P&L)
 - ✅ Funding rate calculation
+- ✅ Event Sourcing & Deterministic Calculation
+- ✅ Microservices Architecture (Matching Service + Trading Service)
+
+### Production Features
+- ✅ User authentication & authorization (JWT, API keys)
+- ✅ Liquidation engine (risk calculation, forced liquidation)
+- ✅ Funding rate management (auto settlement)
+- ✅ Market data service (K-line, depth, 24h statistics)
+- ✅ API Gateway (routing, authentication, rate limiting)
+- ✅ Monitoring system (Prometheus metrics, alerts)
+- ✅ Notification service (email, SMS, push)
+- ✅ Database manager (multi-database support)
+- ✅ RESTful API server (HTTP/1.1, JSON)
 
 ### Performance Optimizations
 - ✅ Memory pool optimization (+5-10% performance)
@@ -18,7 +31,7 @@ A production-ready perpetual futures exchange matching engine with nanosecond-le
 - ✅ NUMA-aware optimization (multi-core)
 - ✅ FPGA acceleration framework (reserved)
 
-### Production Features
+### Infrastructure Features
 - ✅ Logging system (5-level, file output)
 - ✅ Configuration management (INI + environment variables)
 - ✅ Metrics collection (Prometheus format)
@@ -27,6 +40,8 @@ A production-ready perpetual futures exchange matching engine with nanosecond-le
 - ✅ Health checking (system health monitoring)
 - ✅ Optimized persistence (async writing, 3.6x throughput)
 - ✅ Graceful shutdown (signal handling)
+- ✅ Docker support (multi-stage builds)
+- ✅ Kubernetes ready
 
 ## 📊 Performance
 
@@ -69,18 +84,56 @@ cd build && ./comprehensive_performance_comparison 10000
 
 ## 🏗️ Architecture
 
+### Monolithic Architecture
 ```
 perpetual_exchange/
 ├── include/core/          # Core headers
 │   ├── order.h            # Order structure
-│   ├── orderbook.h        # Order book (Red-Black Tree)
+│   ├── orderbook.h        # Order book (Red-Black Tree, ART)
 │   ├── matching_engine.h  # Matching engine
-│   ├── matching_engine_production.h  # Production engine
-│   ├── persistence_optimized.h  # Optimized persistence
-│   └── ...
+│   ├── auth_manager.h     # Authentication & authorization
+│   ├── liquidation_engine.h  # Liquidation system
+│   ├── funding_rate_manager.h  # Funding rate management
+│   ├── market_data_service.h  # Market data service
+│   ├── api_gateway.h      # API gateway
+│   ├── monitoring_system.h  # Monitoring system
+│   ├── notification_service.h  # Notification service
+│   ├── database_manager.h  # Database manager
+│   └── rest_api_server.h  # REST API server
 ├── src/core/              # Core implementations
 ├── src/                   # Applications and benchmarks
+├── services/              # Microservices
+│   ├── matching_service/  # Matching Service (gRPC)
+│   └── trading_service/   # Trading Service (gRPC)
 └── docs/                  # Documentation
+```
+
+### Microservices Architecture
+```
+┌─────────────────┐
+│   API Gateway   │
+└────────┬────────┘
+         │
+    ┌────┴────┐
+    │         │
+┌───▼───┐ ┌──▼──────┐
+│Trading│ │Matching │
+│Service│ │ Service │
+└───┬───┘ └───┬─────┘
+    │         │
+    └────┬────┘
+         │
+    ┌────▼───────────────┐
+    │ Production         │
+    │ Components         │
+    │ - Auth             │
+    │ - Liquidation      │
+    │ - Funding Rate     │
+    │ - Market Data      │
+    │ - Notification     │
+    │ - Database         │
+    │ - Monitoring       │
+    └────────────────────┘
 ```
 
 ## 🚀 Quick Start

@@ -58,7 +58,7 @@ struct alignas(64) Event {
         struct {
             OrderID order_id;
             UserID user_id;
-            std::string reason;
+            char reason[256];  // Fixed-size string to avoid union issues
         } order_rejected;
         
         struct {
@@ -83,55 +83,30 @@ struct alignas(64) Event {
     Event(const Event& other) 
         : type(other.type), sequence_id(other.sequence_id), 
           event_timestamp(other.event_timestamp), instrument_id(other.instrument_id) {
-        if (type == EventType::ORDER_REJECTED) {
-            new(&data.order_rejected) decltype(data.order_rejected)(other.data.order_rejected);
-        } else if (type == EventType::TRADE_EXECUTED) {
-            data.trade_executed = other.data.trade_executed;
-        } else {
-            data = other.data;
-        }
+        data = other.data;
     }
     
     // Move constructor
     Event(Event&& other) noexcept
         : type(other.type), sequence_id(other.sequence_id),
           event_timestamp(other.event_timestamp), instrument_id(other.instrument_id) {
-        if (type == EventType::ORDER_REJECTED) {
-            new(&data.order_rejected) decltype(data.order_rejected)(std::move(other.data.order_rejected));
-        } else if (type == EventType::TRADE_EXECUTED) {
-            data.trade_executed = std::move(other.data.trade_executed);
-        } else {
-            data = other.data;
-        }
+        data = other.data;
     }
     
     // Assignment operators
     Event& operator=(const Event& other) {
         if (this != &other) {
-            if (type == EventType::ORDER_REJECTED) {
-                data.order_rejected.~basic_string();
-            }
             type = other.type;
             sequence_id = other.sequence_id;
             event_timestamp = other.event_timestamp;
             instrument_id = other.instrument_id;
-            if (type == EventType::ORDER_REJECTED) {
-                new(&data.order_rejected) decltype(data.order_rejected)(other.data.order_rejected);
-            } else if (type == EventType::TRADE_EXECUTED) {
-                data.trade_executed = other.data.trade_executed;
-            } else {
-                data = other.data;
-            }
+            data = other.data;
         }
         return *this;
     }
     
-    // Destructor
-    ~Event() {
-        if (type == EventType::ORDER_REJECTED) {
-            data.order_rejected.~basic_string();
-        }
-    }
+    // Destructor (trivial - no cleanup needed with fixed-size arrays)
+    ~Event() = default;
 };
 
 // Event Store for Event Sourcing

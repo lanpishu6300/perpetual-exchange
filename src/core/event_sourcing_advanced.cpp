@@ -418,7 +418,7 @@ EventStreamProcessor::Statistics EventStreamProcessor::get_statistics() const {
     stats.last_processed_sequence = last_processed_.load();
     
     {
-        std::lock_guard<std::mutex> lock(subscriptions_mutex_);
+        std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(subscriptions_mutex_));
         stats.subscriptions_active = subscriptions_.size();
     }
     

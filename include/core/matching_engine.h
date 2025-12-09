@@ -46,7 +46,7 @@ public:
     uint64_t total_trades() const { return total_trades_; }
     uint64_t total_volume() const { return total_volume_; }
     
-private:
+protected:
     // Match order against the book
     std::vector<Trade> match_order(Order* order);
     
@@ -71,7 +71,6 @@ private:
     // Get match price (price-time priority)
     Price get_match_price(const Order* incoming, const Order* resting) const;
     
-private:
     InstrumentID instrument_id_;
     OrderBook orderbook_;
     
@@ -91,6 +90,8 @@ private:
     
     // Sequence generator for trades
     std::atomic<SequenceID> trade_sequence_{0};
+    
+private:
 };
 
 } // namespace perpetual

@@ -1,170 +1,161 @@
-# Docker 环境测试指南
+# Phase 1 优化 Docker 测试指南
+
+## 前置要求
+
+1. **Docker已安装**
+   ```bash
+   docker --version
+   ```
+
+2. **Docker daemon正在运行**
+   ```bash
+   docker ps
+   ```
+   如果报错，需要启动Docker Desktop或Docker daemon
 
 ## 快速开始
 
-### 1. 启动 Docker
+### 方式1: 使用docker compose (推荐)
 
-**macOS:**
 ```bash
-# 打开 Docker Desktop 应用
-open -a Docker
-# 等待Docker启动完成
+./run_phase1_docker_test.sh [threads] [duration] [orders/sec]
 ```
+
+例如:
+```bash
+./run_phase1_docker_test.sh 8 30 5000
+```
+
+### 方式2: 直接使用docker命令
+
+```bash
+./run_phase1_docker_simple.sh [threads] [duration] [orders/sec]
+```
+
+例如:
+```bash
+./run_phase1_docker_simple.sh 8 30 5000
+```
+
+## 测试参数
+
+- **threads**: 并发线程数 (默认: 16)
+- **duration**: 测试持续时间（秒）(默认: 60)
+- **orders/sec**: 每线程每秒订单数 (默认: 10000)
+
+## 测试配置示例
+
+### 轻量级测试 (快速验证)
+```bash
+./run_phase1_docker_simple.sh 4 10 2000
+```
+- 4线程, 10秒, 2000 orders/sec/thread
+- 目标TPS: 8,000
+
+### 标准测试
+```bash
+./run_phase1_docker_simple.sh 8 30 5000
+```
+- 8线程, 30秒, 5000 orders/sec/thread
+- 目标TPS: 40,000
+
+### 压力测试
+```bash
+./run_phase1_docker_simple.sh 16 60 10000
+```
+- 16线程, 60秒, 10000 orders/sec/thread
+- 目标TPS: 160,000
+
+## 预期输出
+
+测试完成后会显示：
+
+1. **性能统计**
+   - 总订单数
+   - 总交易数
+   - 吞吐量 (orders/sec)
+
+2. **延迟统计**
+   - 平均延迟
+   - P50延迟
+   - P99延迟
+
+3. **引擎统计**
+   - 处理的订单数
+   - 执行的交易数
+   - 平均撮合延迟
+
+4. **持久化统计**
+   - 持久化的订单数
+   - 持久化的交易数
+   - 批量持久化次数
+   - 平均持久化延迟
+
+## 故障排除
+
+### Docker daemon未运行
+
+**macOS/Windows:**
+- 启动Docker Desktop
 
 **Linux:**
 ```bash
 sudo systemctl start docker
 ```
 
-### 2. 运行测试
+### 构建失败
+
+检查：
+1. Docker是否正常运行
+2. 网络连接是否正常（需要下载Ubuntu镜像）
+3. 磁盘空间是否充足
+
+### 测试运行失败
+
+检查：
+1. 编译错误 - 查看Docker构建日志
+2. 运行时错误 - 查看容器日志
+3. 权限问题 - 确保脚本有执行权限
+
+## 手动运行步骤
+
+如果脚本不工作，可以手动运行：
 
 ```bash
-# 快速测试 (1000 orders)
-./docker-test.sh 1000
+# 1. 构建镜像
+docker build -f Dockerfile.phase1_test -t phase1_test:latest .
 
-# 完整测试 (5000 orders)
-./docker-test.sh 5000
+# 2. 运行测试
+docker run --rm \
+    -e TEST_THREADS=8 \
+    -e TEST_DURATION=30 \
+    -e TEST_ORDERS_PER_SEC=5000 \
+    --shm-size=2g \
+    phase1_test:latest \
+    sh -c "cd /app/build && ./test_optimized_v3 8 30 5000"
 ```
 
-## 手动测试步骤
+## 结果分析
 
-### 步骤 1: 构建镜像
+### 关键指标
 
-```bash
-# 使用测试专用Dockerfile
-docker build -f Dockerfile.test -t perpetual-benchmark:test .
-```
+1. **吞吐量**: 应该达到或接近目标TPS
+2. **P99延迟**: 应该 < 10μs (优化后)
+3. **持久化延迟**: 应该 < 5μs (优化后)
 
-### 步骤 2: 运行测试
+### 优化效果验证
 
-```bash
-# 快速测试 (1000订单)
-docker run --rm --platform linux/amd64 \
-    perpetual-benchmark:test \
-    ./comprehensive_performance_comparison 1000
+**优化前 (预期)**:
+- 持久化延迟: ~50μs
+- 吞吐量: ~100K TPS
 
-# 完整测试 (5000订单)
-docker run --rm --platform linux/amd64 \
-    perpetual-benchmark:test \
-    ./comprehensive_performance_comparison 5000
-```
+**优化后 (预期)**:
+- 持久化延迟: ~5μs (10x提升)
+- 吞吐量: ~300K TPS (3x提升)
 
-### 步骤 3: 查看结果
+## 下一步
 
-测试结果会直接输出到控制台。
-
-## 预期性能（Docker环境）
-
-由于Docker的虚拟化开销，性能会略低于原生环境：
-
-| 版本 | 原生性能 | Docker性能（预估） |
-|------|---------|-------------------|
-| Original | 300K/s | ~250K/s (-17%) |
-| ART | 409K/s | ~340K/s (-17%) |
-| ART+SIMD | 750K/s | ~550K/s (-27%) |
-
-**注意**: SIMD指令在虚拟环境中性能损失更大
-
-## Docker 镜像说明
-
-### Dockerfile.test
-- **用途**: 性能测试专用
-- **优化**: `-march=x86-64 -O3`
-- **包含**: comprehensive_performance_comparison
-- **大小**: ~100MB
-
-### Dockerfile (原有)
-- **用途**: SIMD benchmark
-- **优化**: `-march=native -mavx2`
-- **包含**: 多个benchmark工具
-
-## 故障排查
-
-### 问题 1: Docker daemon未运行
-```bash
-错误: Cannot connect to the Docker daemon
-解决: 启动 Docker Desktop 或 systemctl start docker
-```
-
-### 问题 2: 平台架构问题
-```bash
-错误: exec format error
-解决: 添加 --platform linux/amd64
-```
-
-### 问题 3: 构建超时
-```bash
-解决: 增加内存限制
-docker build --memory=4g -f Dockerfile.test -t perpetual-benchmark:test .
-```
-
-### 问题 4: SIMD指令不支持
-```bash
-错误: Illegal instruction
-解决: 使用兼容性更好的 -march=x86-64 而不是 -march=native
-```
-
-## 性能对比测试
-
-### 原生 vs Docker
-
-```bash
-# 1. 原生环境测试
-cd build
-./comprehensive_performance_comparison 3000 > native_results.txt
-
-# 2. Docker环境测试  
-./docker-test.sh 3000 > docker_results.txt
-
-# 3. 对比结果
-diff native_results.txt docker_results.txt
-```
-
-## Docker Compose 测试
-
-如果想使用docker-compose:
-
-```bash
-# 修改 docker-compose.yml 使用测试Dockerfile
-docker-compose -f docker-compose.yml up simd-benchmark
-```
-
-## 优化建议
-
-### 提升Docker性能
-
-1. **增加资源限制**:
-   ```bash
-   docker run --cpus="4" --memory="4g" ...
-   ```
-
-2. **使用主机网络**:
-   ```bash
-   docker run --network host ...
-   ```
-
-3. **挂载共享内存**:
-   ```bash
-   docker run --shm-size=2g ...
-   ```
-
-4. **CPU亲和性**:
-   ```bash
-   docker run --cpuset-cpus="0-3" ...
-   ```
-
-## 结论
-
-Docker环境适合:
-- ✅ 功能测试
-- ✅ 集成测试
-- ✅ 部署验证
-
-不适合:
-- ❌ 性能基准测试（有虚拟化开销）
-- ❌ 纳秒级延迟测试（不够精确）
-
-**建议**: 性能测试使用原生环境，生产部署可考虑容器化。
-
-
-
+测试通过后，可以：
+1. 分析性能瓶颈
+2. 继续Phase 2优化 (SIMD, NUMA等)
+3. 进行更长时间的压力测试

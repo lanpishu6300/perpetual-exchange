@@ -1,0 +1,157 @@
+syntax = "proto3";
+
+package perpetual.trading;
+
+option cc_enable_arenas = true;
+
+// Trading Service - 交易服务
+// 负责订单管理、账户管理、持仓管理等
+
+// Submit order request
+message SubmitOrderRequest {
+    uint64 user_id = 1;
+    uint32 instrument_id = 2;
+    OrderSide side = 3;
+    OrderType order_type = 4;
+    int64 price = 5;
+    int64 quantity = 6;
+    string client_order_id = 7;  // Optional client order ID
+}
+
+message SubmitOrderResponse {
+    bool success = 1;
+    string error_message = 2;
+    uint64 order_id = 3;
+    OrderStatus status = 4;
+}
+
+enum OrderSide {
+    ORDER_SIDE_BUY = 0;
+    ORDER_SIDE_SELL = 1;
+}
+
+enum OrderType {
+    ORDER_TYPE_LIMIT = 0;
+    ORDER_TYPE_MARKET = 1;
+    ORDER_TYPE_IOC = 2;
+    ORDER_TYPE_FOK = 3;
+}
+
+enum OrderStatus {
+    ORDER_STATUS_PENDING = 0;
+    ORDER_STATUS_PARTIAL_FILLED = 1;
+    ORDER_STATUS_FILLED = 2;
+    ORDER_STATUS_CANCELLED = 3;
+    ORDER_STATUS_REJECTED = 4;
+}
+
+// Query order request
+message QueryOrderRequest {
+    uint64 order_id = 1;
+    uint64 user_id = 2;  // Optional, for validation
+}
+
+message QueryOrderResponse {
+    bool success = 1;
+    string error_message = 2;
+    OrderInfo order = 3;
+}
+
+message OrderInfo {
+    uint64 order_id = 1;
+    uint64 user_id = 2;
+    uint32 instrument_id = 3;
+    OrderSide side = 4;
+    OrderType order_type = 5;
+    int64 price = 6;
+    int64 quantity = 7;
+    int64 filled_quantity = 8;
+    int64 remaining_quantity = 9;
+    OrderStatus status = 10;
+    uint64 timestamp = 11;
+}
+
+// Query user orders
+message QueryUserOrdersRequest {
+    uint64 user_id = 1;
+    uint32 instrument_id = 2;  // 0 = all instruments
+    OrderStatus status = 3;    // Use 255 = all statuses
+}
+
+message QueryUserOrdersResponse {
+    bool success = 1;
+    string error_message = 2;
+    repeated OrderInfo orders = 3;
+}
+
+// Account balance query
+message QueryAccountRequest {
+    uint64 user_id = 1;
+}
+
+message QueryAccountResponse {
+    bool success = 1;
+    string error_message = 2;
+    AccountInfo account = 3;
+}
+
+message AccountInfo {
+    uint64 user_id = 1;
+    double balance = 2;
+    double frozen = 3;
+    double available = 4;
+    double used_margin = 5;
+}
+
+// Position query
+message QueryPositionRequest {
+    uint64 user_id = 1;
+    uint32 instrument_id = 2;  // 0 = all instruments
+}
+
+message QueryPositionResponse {
+    bool success = 1;
+    string error_message = 2;
+    repeated PositionInfo positions = 3;
+}
+
+message PositionInfo {
+    uint64 user_id = 1;
+    uint32 instrument_id = 2;
+    int64 size = 3;           // Positive = long, negative = short
+    int64 entry_price = 4;
+    double unrealized_pnl = 5;
+    double margin_used = 6;
+}
+
+// Trading Service Interface
+service TradingService {
+    // Submit order (validates and forwards to matching service)
+    rpc SubmitOrder(SubmitOrderRequest) returns (SubmitOrderResponse);
+    
+    // Cancel order
+    rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
+    
+    // Query order
+    rpc QueryOrder(QueryOrderRequest) returns (QueryOrderResponse);
+    
+    // Query user orders
+    rpc QueryUserOrders(QueryUserOrdersRequest) returns (QueryUserOrdersResponse);
+    
+    // Query account
+    rpc QueryAccount(QueryAccountRequest) returns (QueryAccountResponse);
+    
+    // Query position
+    rpc QueryPosition(QueryPositionRequest) returns (QueryPositionResponse);
+}
+
+message CancelOrderRequest {
+    uint64 order_id = 1;
+    uint64 user_id = 2;
+}
+
+message CancelOrderResponse {
+    bool success = 1;
+    string error_message = 2;
+}
+
