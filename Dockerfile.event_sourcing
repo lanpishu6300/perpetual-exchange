@@ -60,3 +60,64 @@ RUN chmod +x run_event_sourcing_benchmark.sh generate_performance_report.py 2>/d
 # Default command: run benchmark
 CMD ["./run_event_sourcing_benchmark.sh"]
 
+
+FROM --platform=linux/amd64 ubuntu:22.04 AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    g++ \
+    make \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy source files
+COPY . .
+
+# Build with all optimizations including Event Sourcing
+RUN mkdir -p build && cd build && \
+    cmake .. \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CXX_FLAGS="-march=native -mavx2 -mfma -O3 -flto -funroll-loops" \
+        -DCMAKE_CXX_STANDARD=17 && \
+    cmake --build . --config Release -j$(nproc) && \
+    # Build event sourcing benchmark if it exists
+    (make event_sourcing_benchmark -j$(nproc) || echo "Benchmark build skipped") || true
+
+# Runtime stage
+FROM --platform=linux/amd64 ubuntu:22.04
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    libstdc++6 \
+    ca-certificates \
+    python3 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy binaries from builder (use shell to handle missing files)
+RUN --mount=from=builder,source=/app/build,target=/build \
+    sh -c 'cp /build/event_sourcing_benchmark* . 2>/dev/null || true; \
+           cp /build/comprehensive_performance_comparison* . 2>/dev/null || true; \
+           cp /build/*_benchmark* . 2>/dev/null || true'
+
+# Copy test scripts
+COPY docker/run_event_sourcing_benchmark.sh ./
+COPY docker/generate_performance_report.py ./
+
+# Create directories for test data
+RUN mkdir -p benchmark_data benchmark_data_io benchmark_data_stream \
+    benchmark_data_cqrs benchmark_data_compression results
+
+# Make scripts executable
+RUN chmod +x run_event_sourcing_benchmark.sh generate_performance_report.py 2>/dev/null || true
+
+# Default command: run benchmark
+CMD ["./run_event_sourcing_benchmark.sh"]
+

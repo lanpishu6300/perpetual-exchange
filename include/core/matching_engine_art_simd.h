@@ -30,3 +30,34 @@ private:
 
 } // namespace perpetual
 
+
+#include "matching_engine_art.h"
+#include "orderbook_art_simd.h"
+#include "art_tree_simd_enhanced.h"
+
+namespace perpetual {
+
+// Matching engine using ART with SIMD optimizations
+// Combines ART tree efficiency with SIMD acceleration
+class MatchingEngineARTSIMD : public MatchingEngineART {
+public:
+    MatchingEngineARTSIMD(InstrumentID instrument_id);
+    ~MatchingEngineARTSIMD();
+    
+    // Process order with SIMD-optimized ART
+    std::vector<Trade> process_order_art_simd(Order* order);
+    
+    // Get SIMD order book
+    OrderBookARTSIMD& get_orderbook_art_simd() { return orderbook_art_simd_; }
+    const OrderBookARTSIMD& get_orderbook_art_simd() const { return orderbook_art_simd_; }
+    
+private:
+    // SIMD-optimized matching
+    std::vector<Trade> match_order_art_simd(Order* order);
+    
+private:
+    OrderBookARTSIMD orderbook_art_simd_;
+};
+
+} // namespace perpetual
+

@@ -62,3 +62,66 @@ coverage/
 *.bak
 *.backup
 *~
+
+cmake-build-*/
+*.build/
+
+# Compiled files
+*.o
+*.obj
+*.exe
+*.out
+*.app
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs and data
+logs/
+data/
+*.log
+*.log.*
+
+# Config files (keep example)
+config.ini
+!config.ini.example
+
+# Test output
+test_output/
+benchmark_output.txt
+*.txt
+!README*.txt
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Coverage
+*.gcov
+*.gcda
+*.gcno
+coverage/
+
+# Backup files
+*.bak
+*.backup
+*~

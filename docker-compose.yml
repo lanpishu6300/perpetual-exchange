@@ -17,3 +17,21 @@ services:
       - SIMD_ENABLED=1
 
 
+
+services:
+  simd-benchmark:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
+    platform: linux/amd64
+    image: perpetual-exchange:simd
+    container_name: simd-benchmark
+    command: ./simd_benchmark
+    volumes:
+      - ./results:/app/results
+    environment:
+      - SIMD_ENABLED=1
+
+
