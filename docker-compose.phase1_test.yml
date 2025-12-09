@@ -1,0 +1,25 @@
+services:
+  phase1_test:
+    build:
+      context: .
+      dockerfile: Dockerfile.phase1_test
+    container_name: phase1_optimization_test
+    volumes:
+      - ./test_results:/app/test_results
+    environment:
+      - TEST_THREADS=16
+      - TEST_DURATION=60
+      - TEST_ORDERS_PER_SEC=10000
+    command: >
+      sh -c "
+        echo '=== Phase 1 Optimization Test ===' &&
+        echo 'Threads: ${TEST_THREADS}' &&
+        echo 'Duration: ${TEST_DURATION} seconds' &&
+        echo 'Orders/sec/thread: ${TEST_ORDERS_PER_SEC}' &&
+        echo '' &&
+        ./test_optimized_v3 ${TEST_THREADS} ${TEST_DURATION} ${TEST_ORDERS_PER_SEC} &&
+        echo '' &&
+        echo '=== Test Complete ==='
+      "
+    shm_size: '2gb'
+

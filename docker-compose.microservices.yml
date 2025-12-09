@@ -1,0 +1,54 @@
+services:
+  matching-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.matching_service
+    platform: linux/amd64
+    container_name: matching-service
+    ports:
+      - "50051:50051"
+    volumes:
+      - ./event_store:/app/event_store
+      - ./logs:/app/logs
+    environment:
+      - INSTRUMENT_ID=1
+      - SERVER_ADDRESS=0.0.0.0:50051
+      - EVENT_STORE_DIR=/app/event_store
+    networks:
+      - exchange-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=:50051"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  trading-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.trading_service
+    platform: linux/amd64
+    container_name: trading-service
+    ports:
+      - "50052:50052"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - SERVER_ADDRESS=0.0.0.0:50052
+      - MATCHING_SERVICE_ADDRESS=matching-service:50051
+    networks:
+      - exchange-network
+    depends_on:
+      - matching-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=:50052"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+networks:
+  exchange-network:
+    driver: bridge
+

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "event_sourcing.h"
+#include "orderbook.h"  // For PriceLevel
 #include "types.h"
 #include <string>
 #include <vector>
@@ -16,6 +17,7 @@
 #include <unordered_map>
 
 namespace perpetual {
+    class MatchingEngineEventSourcing;  // Forward declaration
 
 // ============================================================================
 // 1. Event Compression (事件压缩)
@@ -283,7 +285,8 @@ private:
     std::unordered_map<InstrumentID, std::vector<PriceLevel>> orderbook_cache_;
     mutable std::shared_mutex cache_mutex_;
     
-    // Update cache from events
+public:
+    // Update cache from events (public for implementation)
     void update_cache_from_events(const std::vector<Event>& events);
 };
 

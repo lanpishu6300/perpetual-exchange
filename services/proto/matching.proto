@@ -1,0 +1,114 @@
+syntax = "proto3";
+
+package perpetual.matching;
+
+option cc_enable_arenas = true;
+
+// Matching Service - 撮合服务
+// 负责核心撮合逻辑，保持高内聚、低耦合
+
+// Order request for matching
+message OrderRequest {
+    uint64 order_id = 1;
+    uint64 user_id = 2;
+    uint32 instrument_id = 3;
+    OrderSide side = 4;
+    OrderType order_type = 5;
+    int64 price = 6;          // Fixed-point price
+    int64 quantity = 7;       // Fixed-point quantity
+    uint64 sequence_id = 8;   // Deterministic sequence
+}
+
+enum OrderSide {
+    ORDER_SIDE_BUY = 0;
+    ORDER_SIDE_SELL = 1;
+}
+
+enum OrderType {
+    ORDER_TYPE_LIMIT = 0;
+    ORDER_TYPE_MARKET = 1;
+    ORDER_TYPE_IOC = 2;      // Immediate or Cancel
+    ORDER_TYPE_FOK = 3;      // Fill or Kill
+}
+
+// Match result
+message MatchResult {
+    bool success = 1;
+    string error_message = 2;
+    repeated Trade trades = 3;
+    OrderStatus order_status = 4;
+    int64 remaining_quantity = 5;
+}
+
+// Trade information
+message Trade {
+    uint64 buy_order_id = 1;
+    uint64 sell_order_id = 2;
+    uint64 buy_user_id = 3;
+    uint64 sell_user_id = 4;
+    uint32 instrument_id = 5;
+    int64 price = 6;
+    int64 quantity = 7;
+    uint64 sequence_id = 8;
+    bool is_taker_buy = 9;
+}
+
+enum OrderStatus {
+    ORDER_STATUS_PENDING = 0;
+    ORDER_STATUS_PARTIAL_FILLED = 1;
+    ORDER_STATUS_FILLED = 2;
+    ORDER_STATUS_CANCELLED = 3;
+    ORDER_STATUS_REJECTED = 4;
+}
+
+// Cancel order request
+message CancelOrderRequest {
+    uint64 order_id = 1;
+    uint64 user_id = 2;
+    uint32 instrument_id = 3;
+}
+
+message CancelOrderResponse {
+    bool success = 1;
+    string error_message = 2;
+}
+
+// Order book snapshot
+message OrderBookSnapshot {
+    uint32 instrument_id = 1;
+    repeated PriceLevel bids = 2;
+    repeated PriceLevel asks = 3;
+    uint64 timestamp = 4;
+}
+
+message PriceLevel {
+    int64 price = 1;
+    int64 quantity = 2;
+    int32 order_count = 3;
+}
+
+// Matching Service Interface
+service MatchingService {
+    // Process order for matching
+    rpc ProcessOrder(OrderRequest) returns (MatchResult);
+    
+    // Cancel order
+    rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
+    
+    // Get order book snapshot
+    rpc GetOrderBook(InstrumentRequest) returns (OrderBookSnapshot);
+    
+    // Get best bid/ask
+    rpc GetBestPrice(InstrumentRequest) returns (BestPriceResponse);
+}
+
+message InstrumentRequest {
+    uint32 instrument_id = 1;
+}
+
+message BestPriceResponse {
+    int64 best_bid = 1;
+    int64 best_ask = 2;
+    int64 spread = 3;
+}
+

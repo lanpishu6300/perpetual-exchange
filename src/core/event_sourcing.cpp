@@ -7,6 +7,7 @@
 #include <shared_mutex>
 #include <mutex>
 #include <unordered_map>
+#include <cstring>
 
 namespace perpetual {
 
@@ -42,7 +43,7 @@ std::string Event::serialize() const {
         case EventType::ORDER_REJECTED:
             oss << data.order_rejected.order_id << ","
                 << data.order_rejected.user_id << ","
-                << data.order_rejected.reason;
+                << std::string(data.order_rejected.reason);
             break;
         case EventType::TRADE_EXECUTED:
             oss << data.trade_executed.trade.buy_order_id << ","
@@ -127,7 +128,8 @@ Event Event::deserialize(const std::string& data_str) {
             std::getline(iss, token, ',');
             event.data.order_rejected.user_id = std::stoull(token);
             std::getline(iss, token);
-            event.data.order_rejected.reason = token;
+            strncpy(event.data.order_rejected.reason, token.c_str(), sizeof(event.data.order_rejected.reason) - 1);
+            event.data.order_rejected.reason[sizeof(event.data.order_rejected.reason) - 1] = '\0';
             break;
         case EventType::TRADE_EXECUTED:
             std::getline(iss, token, ',');
@@ -493,7 +495,8 @@ void EventPublisher::publish_order_rejected(OrderID order_id, UserID user_id,
     event.type = EventType::ORDER_REJECTED;
     event.data.order_rejected.order_id = order_id;
     event.data.order_rejected.user_id = user_id;
-    event.data.order_rejected.reason = reason;
+    strncpy(event.data.order_rejected.reason, reason.c_str(), sizeof(event.data.order_rejected.reason) - 1);
+    event.data.order_rejected.reason[sizeof(event.data.order_rejected.reason) - 1] = '\0';
     
     event_store_->append_event(event);
 }
@@ -523,7 +526,8 @@ void EventPublisher::publish_order_status_changed(OrderID order_id, OrderStatus 
     } else if (new_status == OrderStatus::REJECTED) {
         event.type = EventType::ORDER_REJECTED;
         event.data.order_rejected.order_id = order_id;
-        event.data.order_rejected.reason = "Status changed";
+        strncpy(event.data.order_rejected.reason, "Status changed", sizeof(event.data.order_rejected.reason) - 1);
+        event.data.order_rejected.reason[sizeof(event.data.order_rejected.reason) - 1] = '\0';
     }
     
     if (event.type != EventType::ORDER_PLACED) {  // Valid event type
