@@ -17,14 +17,15 @@
 - 锁竞争: ~100-500ns
 
 **优化方案**:
-1. **Lock-Free Order Book**
-   - 使用无锁数据结构（Lock-Free Skip List或Lock-Free ART）
-   - 消除所有mutex和spinlock
+1. **Lock-Free Order Book** (部分实现)
+   - ✅ Lock-Free SPSC Queue 已实现（用于事件队列）
+   - ⚠️ OrderBookART 仍使用 mutex（待优化为完全无锁）
    - 预期提升: 50-70%
 
-2. **SIMD价格比较**
-   - 使用AVX-512批量比较价格
-   - 一次比较8-16个价格
+2. **SIMD价格比较** (已实现)
+   - ✅ 使用AVX2批量比较价格（当前实现）
+   - ✅ 一次比较4个价格（256-bit寄存器，4个64位整数）
+   - 💡 未来可升级到AVX-512以支持8-16个价格
    - 预期提升: 3-5倍
 
 3. **NUMA感知内存分配**
@@ -161,7 +162,8 @@
 __attribute__((hot)) 
 inline bool can_match_price(Price taker_price, Price maker_price) {
     // 使用SIMD批量比较
-    return _mm512_cmp_epi64_mask(...);
+    // 当前使用AVX2，未来可升级到AVX-512
+    return DeterministicCalculator::can_match(taker_price, maker_price, true);
 }
 
 // 使用 __builtin_prefetch 预取数据
@@ -335,14 +337,15 @@ public:
 - 锁竞争: ~100-500ns
 
 **优化方案**:
-1. **Lock-Free Order Book**
-   - 使用无锁数据结构（Lock-Free Skip List或Lock-Free ART）
-   - 消除所有mutex和spinlock
+1. **Lock-Free Order Book** (部分实现)
+   - ✅ Lock-Free SPSC Queue 已实现（用于事件队列）
+   - ⚠️ OrderBookART 仍使用 mutex（待优化为完全无锁）
    - 预期提升: 50-70%
 
-2. **SIMD价格比较**
-   - 使用AVX-512批量比较价格
-   - 一次比较8-16个价格
+2. **SIMD价格比较** (已实现)
+   - ✅ 使用AVX2批量比较价格（当前实现）
+   - ✅ 一次比较4个价格（256-bit寄存器，4个64位整数）
+   - 💡 未来可升级到AVX-512以支持8-16个价格
    - 预期提升: 3-5倍
 
 3. **NUMA感知内存分配**
@@ -479,7 +482,8 @@ public:
 __attribute__((hot)) 
 inline bool can_match_price(Price taker_price, Price maker_price) {
     // 使用SIMD批量比较
-    return _mm512_cmp_epi64_mask(...);
+    // 当前使用AVX2，未来可升级到AVX-512
+    return DeterministicCalculator::can_match(taker_price, maker_price, true);
 }
 
 // 使用 __builtin_prefetch 预取数据
