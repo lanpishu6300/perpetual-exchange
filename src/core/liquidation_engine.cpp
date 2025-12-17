@@ -1,10 +1,13 @@
 #include "core/liquidation_engine.h"
 #include "core/position_manager.h"
-#include "core/account_manager.h"
+#include "core/account_manager.h"  // AccountBalanceManager is in account_manager.h
 #include "core/order.h"
 #include "core/types.h"
 #include <algorithm>
 #include <cmath>
+#include <string>
+#include <vector>
+#include <atomic>
 
 namespace perpetual {
 
@@ -15,7 +18,7 @@ LiquidationEngine::LiquidationEngine() {
     insurance_fund_balance_ = 1000000.0;  // 1M USD
 }
 
-LiquidationEngine::RiskLevel LiquidationEngine::calculateRiskLevel(
+RiskLevel LiquidationEngine::calculateRiskLevel(
     UserID user_id, InstrumentID instrument_id, Price current_price) const {
     
     RiskLevel risk;
@@ -63,7 +66,7 @@ bool LiquidationEngine::shouldLiquidate(UserID user_id, InstrumentID instrument_
     return risk.is_liquidatable;
 }
 
-LiquidationEngine::LiquidationResult LiquidationEngine::liquidate(
+LiquidationResult LiquidationEngine::liquidate(
     UserID user_id, InstrumentID instrument_id, Price current_price,
     LiquidationStrategy strategy) {
     
@@ -86,192 +89,7 @@ LiquidationEngine::LiquidationResult LiquidationEngine::liquidate(
     
     // Calculate liquidation quantity
     Quantity liquidate_quantity = position_size;
-    if (strategy == PARTIAL_LIQUIDATION) {
-        // Liquidate 50% of position
-        liquidate_quantity = position_size / 2;
-        if (liquidate_quantity == 0) {
-            liquidate_quantity = position_size;  // At least 1
-        }
-    }
-    
-    // Determine order side (opposite of position)
-    OrderSide order_side = position_size > 0 ? OrderSide::SELL : OrderSide::BUY;
-    liquidate_quantity = std::abs(liquidate_quantity);
-    
-    // Create liquidation order
-    auto order = createLiquidationOrder(user_id, instrument_id, liquidate_quantity, order_side);
-    if (!order) {
-        result.error_message = "Failed to create liquidation order";
-        return result;
-    }
-    
-    // Execute through matching callback
-    auto trades = match_callback_(order.get());
-    
-    result.trades = trades;
-    result.liquidated_quantity = liquidate_quantity;
-    
-    // Calculate insurance fund usage if needed
-    if (trades.empty()) {
-        // If no matches, may need insurance fund
-        double position_value = (static_cast<double>(liquidate_quantity) / QTY_SCALE) *
-                               (static_cast<double>(current_price) / PRICE_SCALE);
-        double margin_deficit = position_value * maintenance_margin_ratio_;
-        
-        if (margin_deficit > insurance_fund_balance_) {
-            result.error_message = "Insufficient insurance fund";
-            result.success = false;
-            return result;
-        }
-        
-        result.insurance_fund_used = margin_deficit;
-        insurance_fund_balance_ -= margin_deficit;
-    } else {
-        result.success = true;
-    }
-    
-    return result;
-}
-
-std::vector<UserID> LiquidationEngine::checkAllPositions(Price current_price) {
-    std::vector<UserID> users_to_liquidate;
-    
-    // This would need to iterate through all users with positions
-    // In production, maintain an index of users with open positions
-    // For now, return empty (would need position manager to support iteration)
-    
-    return users_to_liquidate;
-}
-
-Price LiquidationEngine::calculateLiquidationPrice(UserID user_id, InstrumentID instrument_id,
-                                                   Quantity position_size) const {
-    // Simplified: use current price as liquidation price
-    // In production, calculate based on entry price, margin, and maintenance margin
-    return 0;  // Would need current price passed in
-}
-
-std::unique_ptr<Order> LiquidationEngine::createLiquidationOrder(
-    UserID user_id, InstrumentID instrument_id, Quantity quantity, OrderSide side) {
-    
-    // Generate order ID (use special range for liquidation orders)
-    static std::atomic<OrderID> next_liquidation_order_id{9000000000000000000ULL};
-    OrderID order_id = next_liquidation_order_id++;
-    
-    // Create market order for immediate liquidation
-    auto order = std::make_unique<Order>(
-        order_id,
-        user_id,
-        instrument_id,
-        side,
-        0,  // Market order (price = 0)
-        quantity,
-        OrderType::MARKET
-    );
-    
-    // Note: In production, you might want to add an is_liquidation flag to Order struct
-    order->timestamp = get_current_timestamp();
-    order->sequence_id = get_current_timestamp();
-    
-    return order;
-}
-
-double LiquidationEngine::calculateMaintenanceMargin(Quantity position_size, Price entry_price,
-                                                     Price current_price, double leverage) const {
-    double position_value = (static_cast<double>(position_size) / QTY_SCALE) *
-                           (static_cast<double>(current_price) / PRICE_SCALE);
-    return position_value * maintenance_margin_ratio_;
-}
-
-} // namespace perpetual
-
-
-#include "core/account_manager.h"
-#include "core/order.h"
-#include "core/types.h"
-#include <algorithm>
-#include <cmath>
-
-namespace perpetual {
-
-LiquidationEngine::LiquidationEngine() {
-    // Default values
-    maintenance_margin_ratio_ = 0.005;  // 0.5%
-    liquidation_margin_ratio_ = 0.004;  // 0.4%
-    insurance_fund_balance_ = 1000000.0;  // 1M USD
-}
-
-LiquidationEngine::RiskLevel LiquidationEngine::calculateRiskLevel(
-    UserID user_id, InstrumentID instrument_id, Price current_price) const {
-    
-    RiskLevel risk;
-    
-    if (!position_manager_ || !account_manager_) {
-        return risk;
-    }
-    
-    // Get position size
-    Quantity position_size = position_manager_->getPositionSize(user_id, instrument_id);
-    if (position_size == 0) {
-        return risk;
-    }
-    
-    // Get account balance
-    auto account_stats = account_manager_->getAccountStats(user_id);
-    
-    // Calculate position value
-    risk.position_value = (static_cast<double>(position_size) / QTY_SCALE) * 
-                         (static_cast<double>(current_price) / PRICE_SCALE);
-    
-    // Calculate maintenance margin (simplified - use actual position entry price in production)
-    double leverage = 10.0;  // Default 10x leverage
-    risk.maintenance_margin = risk.position_value * maintenance_margin_ratio_;
-    
-    // Calculate margin ratio
-    risk.margin_ratio = account_stats.used_margin > 0 ? 
-                       (account_stats.available + account_stats.used_margin) / risk.position_value : 0.0;
-    
-    // Calculate risk ratio
-    risk.risk_ratio = risk.margin_ratio > 0 ? 
-                     maintenance_margin_ratio_ / risk.margin_ratio : 999.0;
-    
-    risk.available_balance = account_stats.available;
-    
-    // Check if liquidatable
-    risk.is_liquidatable = risk.margin_ratio < liquidation_margin_ratio_;
-    
-    return risk;
-}
-
-bool LiquidationEngine::shouldLiquidate(UserID user_id, InstrumentID instrument_id,
-                                       Price current_price) const {
-    auto risk = calculateRiskLevel(user_id, instrument_id, current_price);
-    return risk.is_liquidatable;
-}
-
-LiquidationEngine::LiquidationResult LiquidationEngine::liquidate(
-    UserID user_id, InstrumentID instrument_id, Price current_price,
-    LiquidationStrategy strategy) {
-    
-    LiquidationResult result;
-    result.user_id = user_id;
-    result.instrument_id = instrument_id;
-    result.liquidation_price = current_price;
-    
-    if (!position_manager_ || !account_manager_ || !match_callback_) {
-        result.error_message = "Liquidation engine not properly initialized";
-        return result;
-    }
-    
-    // Get current position
-    Quantity position_size = position_manager_->getPositionSize(user_id, instrument_id);
-    if (position_size == 0) {
-        result.error_message = "No position to liquidate";
-        return result;
-    }
-    
-    // Calculate liquidation quantity
-    Quantity liquidate_quantity = position_size;
-    if (strategy == PARTIAL_LIQUIDATION) {
+    if (strategy == LiquidationStrategy::PARTIAL_LIQUIDATION) {
         // Liquidate 50% of position
         liquidate_quantity = position_size / 2;
         if (liquidate_quantity == 0) {

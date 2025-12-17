@@ -190,4 +190,3 @@ int main() {
     benchmarkOptimizedV2();
     return 0;
 }
-

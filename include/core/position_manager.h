@@ -1,63 +1,53 @@
 #pragma once
 
-#include "position.h"
 #include "types.h"
-#include "config.h"
+#include "order.h"
 #include <unordered_map>
 #include <mutex>
-#include <atomic>
 
 namespace perpetual {
 
-// Position limit management
+// Position manager for tracking and limiting positions
 class PositionManager {
 public:
     PositionManager();
+    ~PositionManager();
+    
+    // Get position size for a user and instrument
+    Quantity getPositionSize(UserID user_id, InstrumentID instrument_id) const;
     
     // Check if position limit allows new position
     bool checkPositionLimit(UserID user_id, InstrumentID instrument_id, 
                            Quantity quantity, OrderSide side) const;
     
-    // Get current position size
-    Quantity getPositionSize(UserID user_id, InstrumentID instrument_id) const;
-    
-    // Get position limit for user/instrument
-    Quantity getPositionLimit(UserID user_id, InstrumentID instrument_id) const;
-    
     // Set position limit
     void setPositionLimit(UserID user_id, InstrumentID instrument_id, Quantity limit);
     
-    // Set default position limit
-    void setDefaultPositionLimit(Quantity limit) { default_limit_ = limit; }
+    // Get position limit
+    Quantity getPositionLimit(UserID user_id, InstrumentID instrument_id) const;
     
-    // Calculate new position size after order
+    // Calculate new position size after trade
     Quantity calculateNewPositionSize(UserID user_id, InstrumentID instrument_id,
-                                      Quantity current_size, Quantity order_qty,
-                                      OrderSide order_side) const;
+                                     Quantity current_size, Quantity trade_size, OrderSide side) const;
+    
+    // Update position size (called by matching engine)
+    void updatePosition(UserID user_id, InstrumentID instrument_id, 
+                       Quantity delta, OrderSide side);
     
 private:
-    struct PositionKey {
-        UserID user_id;
-        InstrumentID instrument_id;
-        
-        bool operator==(const PositionKey& other) const {
-            return user_id == other.user_id && instrument_id == other.instrument_id;
-        }
-    };
-    
-    struct PositionKeyHash {
-        size_t operator()(const PositionKey& key) const {
-            return std::hash<UserID>()(key.user_id) ^ 
-                   (std::hash<InstrumentID>()(key.instrument_id) << 1);
-        }
-    };
-    
+    // Position limits: (user_id, instrument_id) -> limit
     mutable std::mutex limits_mutex_;
-    std::unordered_map<PositionKey, Quantity, PositionKeyHash> position_limits_;
-    Quantity default_limit_ = 1000000; // Default limit
+    std::unordered_map<uint64_t, Quantity> position_limits_;
+    
+    // Current positions: (user_id, instrument_id) -> size
+    mutable std::mutex positions_mutex_;
+    std::unordered_map<uint64_t, Quantity> current_positions_;
+    
+    // Helper to create key
+    uint64_t makeKey(UserID user_id, InstrumentID instrument_id) const {
+        return (static_cast<uint64_t>(user_id) << 32) | static_cast<uint64_t>(instrument_id);
+    }
 };
 
 } // namespace perpetual
-
-
 

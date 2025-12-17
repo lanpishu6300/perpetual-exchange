@@ -1,0 +1,97 @@
+#pragma once
+
+#include "matching_engine.h"
+#include "memory_pool.h"
+#include "lockfree_queue.h"
+#include "simd_utils.h"
+#include "numa_utils.h"
+#include <thread>
+#include <vector>
+#include <atomic>
+
+namespace perpetual {
+
+// Optimized matching engine with memory pool, lock-free structures, and SIMD
+class OptimizedMatchingEngine : public MatchingEngine {
+public:
+    OptimizedMatchingEngine(InstrumentID instrument_id);
+    ~OptimizedMatchingEngine();
+    
+    // Process order with optimizations
+    std::vector<Trade> process_order_optimized(Order* order);
+    
+    // Batch process orders using SIMD
+    std::vector<Trade> process_orders_batch(const std::vector<Order*>& orders);
+    
+    // Get statistics
+    size_t memory_pool_allocations() const { 
+        // Thread-local pool doesn't expose stats directly
+        return 0; 
+    }
+    size_t memory_pool_blocks() const { 
+        return 0; 
+    }
+    
+private:
+    // Thread-local memory pool (per-thread instance)
+    ThreadLocalMemoryPool<Order> order_pool_;
+    LockFreeSPSCQueue<Order*> order_queue_;
+    
+    // SIMD-optimized matching
+    std::vector<Trade> match_order_simd(Order* order);
+    
+    // NUMA-aware processing
+    void setup_numa_affinity();
+    
+    std::atomic<bool> numa_configured_{false};
+};
+
+} // namespace perpetual
+
+#include "matching_engine.h"
+#include "memory_pool.h"
+#include "lockfree_queue.h"
+#include "simd_utils.h"
+#include "numa_utils.h"
+#include <thread>
+#include <vector>
+#include <atomic>
+
+namespace perpetual {
+
+// Optimized matching engine with memory pool, lock-free structures, and SIMD
+class OptimizedMatchingEngine : public MatchingEngine {
+public:
+    OptimizedMatchingEngine(InstrumentID instrument_id);
+    ~OptimizedMatchingEngine();
+    
+    // Process order with optimizations
+    std::vector<Trade> process_order_optimized(Order* order);
+    
+    // Batch process orders using SIMD
+    std::vector<Trade> process_orders_batch(const std::vector<Order*>& orders);
+    
+    // Get statistics
+    size_t memory_pool_allocations() const { 
+        // Thread-local pool doesn't expose stats directly
+        return 0; 
+    }
+    size_t memory_pool_blocks() const { 
+        return 0; 
+    }
+    
+private:
+    // Thread-local memory pool (per-thread instance)
+    ThreadLocalMemoryPool<Order> order_pool_;
+    LockFreeSPSCQueue<Order*> order_queue_;
+    
+    // SIMD-optimized matching
+    std::vector<Trade> match_order_simd(Order* order);
+    
+    // NUMA-aware processing
+    void setup_numa_affinity();
+    
+    std::atomic<bool> numa_configured_{false};
+};
+
+} // namespace perpetual

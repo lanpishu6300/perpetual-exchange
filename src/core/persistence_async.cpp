@@ -722,4 +722,3 @@ AsyncPersistenceManager::Statistics AsyncPersistenceManager::getStatistics() con
 }
 
 } // namespace perpetual
-

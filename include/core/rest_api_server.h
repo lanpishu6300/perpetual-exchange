@@ -286,4 +286,3 @@ private:
 };
 
 } // namespace perpetual
-

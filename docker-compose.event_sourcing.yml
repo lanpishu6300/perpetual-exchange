@@ -26,4 +26,3 @@ services:
     command: ["./run_event_sourcing_benchmark.sh", "10000"]
     # Uncomment to override command
     # command: ["bash", "-c", "./run_event_sourcing_benchmark.sh 50000 && python3 generate_performance_report.py results/benchmark_* EVENT_SOURCING_DOCKER_PERFORMANCE_REPORT.md"]
-

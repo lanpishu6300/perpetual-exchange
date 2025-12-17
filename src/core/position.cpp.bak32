@@ -1,0 +1,307 @@
+#include "core/position.h"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+
+namespace perpetual {
+
+void Position::update_position(OrderSide trade_side, Quantity trade_size, Price trade_price,
+                               OffsetFlag offset_flag, int32_t contract_multiplier) {
+    if (offset_flag == OffsetFlag::OPEN) {
+        // Opening position
+        if (trade_side == OrderSide::BUY) {
+            // Opening long position
+            long_size += trade_size;
+            // Update average open price for long
+            if (size >= 0) {
+                // Existing long or flat position
+                int64_t total_cost = (avg_open_price * std::abs(size) + trade_price * trade_size);
+                int64_t total_size = std::abs(size) + trade_size;
+                avg_open_price = total_size > 0 ? total_cost / total_size : trade_price;
+            } else {
+                // Existing short position - reducing short or flipping to long
+                if (std::abs(size) >= trade_size) {
+                    // Reducing short position
+                    // Average price remains for remaining short
+                } else {
+                    // Flipping from short to long
+                    avg_open_price = trade_price;
+                }
+            }
+        } else {
+            // Opening short position
+            short_size += trade_size;
+            // Update average open price for short
+            if (size <= 0) {
+                // Existing short or flat position
+                int64_t total_cost = (avg_open_price * std::abs(size) + trade_price * trade_size);
+                int64_t total_size = std::abs(size) + trade_size;
+                avg_open_price = total_size > 0 ? total_cost / total_size : trade_price;
+            } else {
+                // Existing long position - reducing long or flipping to short
+                if (size >= trade_size) {
+                    // Reducing long position
+                    // Average price remains for remaining long
+                } else {
+                    // Flipping from long to short
+                    avg_open_price = trade_price;
+                }
+            }
+        }
+    } else {
+        // Closing position
+        if (trade_side == OrderSide::BUY) {
+            // Closing short position
+            short_size = std::max<Quantity>(0, short_size - trade_size);
+        } else {
+            // Closing long position
+            long_size = std::max<Quantity>(0, long_size - trade_size);
+        }
+    }
+    
+    // Update net position size
+    size = long_size - short_size;
+}
+
+void Position::update_unrealized_pnl(Price mark_price, bool is_inverse) {
+    if (size == 0) {
+        unrealized_pnl = 0;
+        return;
+    }
+    
+    if (is_inverse) {
+        // Inverse contract: PnL = contract_multiplier * position_size * (1/entry_price - 1/mark_price)
+        // Simplified: we need contract_multiplier which should be passed
+        // For now, using basic calculation
+        if (size > 0) {
+            // Long position
+            unrealized_pnl = size * (PRICE_SCALE / mark_price - PRICE_SCALE / avg_open_price);
+        } else {
+            // Short position
+            unrealized_pnl = size * (PRICE_SCALE / avg_open_price - PRICE_SCALE / mark_price);
+        }
+    } else {
+        // Linear contract: PnL = contract_multiplier * position_size * (mark_price - entry_price)
+        if (size > 0) {
+            // Long position
+            unrealized_pnl = size * (mark_price - avg_open_price);
+        } else {
+            // Short position
+            unrealized_pnl = size * (avg_open_price - mark_price);
+        }
+    }
+}
+
+int64_t Position::calculate_margin(Price mark_price, int32_t contract_multiplier) const {
+    if (size == 0) {
+        return 0;
+    }
+    
+    Quantity abs_size = std::abs(size);
+    int64_t notional_value = (abs_size * mark_price * contract_multiplier) / QTY_SCALE / PRICE_SCALE;
+    
+    if (leverage > 0) {
+        return notional_value / leverage;
+    }
+    return notional_value;
+}
+
+bool Position::should_liquidate(Price mark_price, int64_t account_balance,
+                                int64_t maintenance_margin_rate) const {
+    if (size == 0) {
+        return false;
+    }
+    
+    // Calculate unrealized PnL without modifying the position
+    int64_t calculated_unrealized_pnl = 0;
+    if (size > 0) {
+        // Long position
+        calculated_unrealized_pnl = size * (mark_price - avg_open_price);
+    } else {
+        // Short position
+        calculated_unrealized_pnl = size * (avg_open_price - mark_price);
+    }
+    
+    int64_t total_equity = account_balance + calculated_unrealized_pnl;
+    int64_t required_margin = (used_margin * maintenance_margin_rate) / 100;  // maintenance_margin_rate in basis points
+    
+    return total_equity < required_margin;
+}
+
+Price Position::calculate_liquidation_price(int64_t account_balance,
+                                            int64_t maintenance_margin_rate,
+                                            int32_t contract_multiplier,
+                                            bool is_inverse) const {
+    if (size == 0 || leverage == 0) {
+        return 0;
+    }
+    
+    // Simplified liquidation price calculation
+    // For long: liquidation_price = entry_price * (1 - 1/leverage + maintenance_margin_rate)
+    // For short: liquidation_price = entry_price * (1 + 1/leverage - maintenance_margin_rate)
+    
+    if (size > 0) {
+        // Long position
+        int64_t multiplier = (10000 - (10000 / leverage) + maintenance_margin_rate);
+        return (avg_open_price * multiplier) / 10000;
+    } else {
+        // Short position
+        int64_t multiplier = (10000 + (10000 / leverage) - maintenance_margin_rate);
+        return (avg_open_price * multiplier) / 10000;
+    }
+}
+
+} // namespace perpetual
+
+#include <cmath>
+#include <cstdint>
+
+namespace perpetual {
+
+void Position::update_position(OrderSide trade_side, Quantity trade_size, Price trade_price,
+                               OffsetFlag offset_flag, int32_t contract_multiplier) {
+    if (offset_flag == OffsetFlag::OPEN) {
+        // Opening position
+        if (trade_side == OrderSide::BUY) {
+            // Opening long position
+            long_size += trade_size;
+            // Update average open price for long
+            if (size >= 0) {
+                // Existing long or flat position
+                int64_t total_cost = (avg_open_price * std::abs(size) + trade_price * trade_size);
+                int64_t total_size = std::abs(size) + trade_size;
+                avg_open_price = total_size > 0 ? total_cost / total_size : trade_price;
+            } else {
+                // Existing short position - reducing short or flipping to long
+                if (std::abs(size) >= trade_size) {
+                    // Reducing short position
+                    // Average price remains for remaining short
+                } else {
+                    // Flipping from short to long
+                    avg_open_price = trade_price;
+                }
+            }
+        } else {
+            // Opening short position
+            short_size += trade_size;
+            // Update average open price for short
+            if (size <= 0) {
+                // Existing short or flat position
+                int64_t total_cost = (avg_open_price * std::abs(size) + trade_price * trade_size);
+                int64_t total_size = std::abs(size) + trade_size;
+                avg_open_price = total_size > 0 ? total_cost / total_size : trade_price;
+            } else {
+                // Existing long position - reducing long or flipping to short
+                if (size >= trade_size) {
+                    // Reducing long position
+                    // Average price remains for remaining long
+                } else {
+                    // Flipping from long to short
+                    avg_open_price = trade_price;
+                }
+            }
+        }
+    } else {
+        // Closing position
+        if (trade_side == OrderSide::BUY) {
+            // Closing short position
+            short_size = std::max<Quantity>(0, short_size - trade_size);
+        } else {
+            // Closing long position
+            long_size = std::max<Quantity>(0, long_size - trade_size);
+        }
+    }
+    
+    // Update net position size
+    size = long_size - short_size;
+}
+
+void Position::update_unrealized_pnl(Price mark_price, bool is_inverse) {
+    if (size == 0) {
+        unrealized_pnl = 0;
+        return;
+    }
+    
+    if (is_inverse) {
+        // Inverse contract: PnL = contract_multiplier * position_size * (1/entry_price - 1/mark_price)
+        // Simplified: we need contract_multiplier which should be passed
+        // For now, using basic calculation
+        if (size > 0) {
+            // Long position
+            unrealized_pnl = size * (PRICE_SCALE / mark_price - PRICE_SCALE / avg_open_price);
+        } else {
+            // Short position
+            unrealized_pnl = size * (PRICE_SCALE / avg_open_price - PRICE_SCALE / mark_price);
+        }
+    } else {
+        // Linear contract: PnL = contract_multiplier * position_size * (mark_price - entry_price)
+        if (size > 0) {
+            // Long position
+            unrealized_pnl = size * (mark_price - avg_open_price);
+        } else {
+            // Short position
+            unrealized_pnl = size * (avg_open_price - mark_price);
+        }
+    }
+}
+
+int64_t Position::calculate_margin(Price mark_price, int32_t contract_multiplier) const {
+    if (size == 0) {
+        return 0;
+    }
+    
+    Quantity abs_size = std::abs(size);
+    int64_t notional_value = (abs_size * mark_price * contract_multiplier) / QTY_SCALE / PRICE_SCALE;
+    
+    if (leverage > 0) {
+        return notional_value / leverage;
+    }
+    return notional_value;
+}
+
+bool Position::should_liquidate(Price mark_price, int64_t account_balance,
+                                int64_t maintenance_margin_rate) const {
+    if (size == 0) {
+        return false;
+    }
+    
+    // Calculate unrealized PnL without modifying the position
+    int64_t calculated_unrealized_pnl = 0;
+    if (size > 0) {
+        // Long position
+        calculated_unrealized_pnl = size * (mark_price - avg_open_price);
+    } else {
+        // Short position
+        calculated_unrealized_pnl = size * (avg_open_price - mark_price);
+    }
+    
+    int64_t total_equity = account_balance + calculated_unrealized_pnl;
+    int64_t required_margin = (used_margin * maintenance_margin_rate) / 100;  // maintenance_margin_rate in basis points
+    
+    return total_equity < required_margin;
+}
+
+Price Position::calculate_liquidation_price(int64_t account_balance,
+                                            int64_t maintenance_margin_rate,
+                                            int32_t contract_multiplier,
+                                            bool is_inverse) const {
+    if (size == 0 || leverage == 0) {
+        return 0;
+    }
+    
+    // Simplified liquidation price calculation
+    // For long: liquidation_price = entry_price * (1 - 1/leverage + maintenance_margin_rate)
+    // For short: liquidation_price = entry_price * (1 + 1/leverage - maintenance_margin_rate)
+    
+    if (size > 0) {
+        // Long position
+        int64_t multiplier = (10000 - (10000 / leverage) + maintenance_margin_rate);
+        return (avg_open_price * multiplier) / 10000;
+    } else {
+        // Short position
+        int64_t multiplier = (10000 + (10000 / leverage) - maintenance_margin_rate);
+        return (avg_open_price * multiplier) / 10000;
+    }
+}
+
+} // namespace perpetual

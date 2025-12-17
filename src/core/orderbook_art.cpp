@@ -630,4 +630,3 @@ void OrderBookART::get_depth(size_t n, std::vector<PriceLevel>& bids,
 }
 
 } // namespace perpetual
-
