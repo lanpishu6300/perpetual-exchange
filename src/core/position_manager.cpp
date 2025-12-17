@@ -1,119 +1,88 @@
 #include "core/position_manager.h"
-#include "core/config.h"
+#include <algorithm>
 
 namespace perpetual {
 
 PositionManager::PositionManager() {
-    auto& config = Config::getInstance();
-    default_limit_ = double_to_quantity(config.getDouble(ConfigKeys::MAX_POSITION_SIZE, 1000000.0));
+}
+
+PositionManager::~PositionManager() {
+}
+
+Quantity PositionManager::getPositionSize(UserID user_id, InstrumentID instrument_id) const {
+    std::lock_guard<std::mutex> lock(positions_mutex_);
+    uint64_t key = makeKey(user_id, instrument_id);
+    auto it = current_positions_.find(key);
+    if (it != current_positions_.end()) {
+        return it->second;
+    }
+    return 0;
 }
 
 bool PositionManager::checkPositionLimit(UserID user_id, InstrumentID instrument_id,
                                         Quantity quantity, OrderSide side) const {
-    PositionKey key{user_id, instrument_id};
-    Quantity limit = getPositionLimit(user_id, instrument_id);
+    std::lock_guard<std::mutex> lock_limits(limits_mutex_);
+    uint64_t key = makeKey(user_id, instrument_id);
+    auto limit_it = position_limits_.find(key);
     
-    // For now, we check absolute position size
-    // In production, you'd get current position from PositionManager
-    // This is a simplified check
-    return quantity <= limit;
-}
-
-Quantity PositionManager::getPositionSize(UserID user_id, InstrumentID instrument_id) const {
-    // In production, this would query the actual position
-    // For now, return 0 as placeholder
-    return 0;
-}
-
-Quantity PositionManager::getPositionLimit(UserID user_id, InstrumentID instrument_id) const {
-    std::lock_guard<std::mutex> lock(limits_mutex_);
-    
-    PositionKey key{user_id, instrument_id};
-    auto it = position_limits_.find(key);
-    if (it != position_limits_.end()) {
-        return it->second;
+    // If no limit set, allow
+    if (limit_it == position_limits_.end()) {
+        return true;
     }
     
-    return default_limit_;
+    Quantity limit = limit_it->second;
+    
+    // Get current position
+    std::lock_guard<std::mutex> lock_positions(positions_mutex_);
+    auto pos_it = current_positions_.find(key);
+    Quantity current_size = (pos_it != current_positions_.end()) ? pos_it->second : 0;
+    
+    // Calculate new position size
+    Quantity new_size = calculateNewPositionSize(user_id, instrument_id, current_size, quantity, side);
+    
+    // Check if exceeds limit
+    return std::abs(new_size) <= limit;
 }
 
 void PositionManager::setPositionLimit(UserID user_id, InstrumentID instrument_id, Quantity limit) {
     std::lock_guard<std::mutex> lock(limits_mutex_);
-    PositionKey key{user_id, instrument_id};
+    uint64_t key = makeKey(user_id, instrument_id);
     position_limits_[key] = limit;
-}
-
-Quantity PositionManager::calculateNewPositionSize(UserID user_id, InstrumentID instrument_id,
-                                                  Quantity current_size, Quantity order_qty,
-                                                  OrderSide order_side) const {
-    // Calculate new position after order execution
-    if (order_side == OrderSide::BUY) {
-        return current_size + order_qty;
-    } else {
-        // SELL - reduce position (can go negative for short positions)
-        return current_size - order_qty;
-    }
-}
-
-} // namespace perpetual
-
-
-#include "core/config.h"
-
-namespace perpetual {
-
-PositionManager::PositionManager() {
-    auto& config = Config::getInstance();
-    default_limit_ = double_to_quantity(config.getDouble(ConfigKeys::MAX_POSITION_SIZE, 1000000.0));
-}
-
-bool PositionManager::checkPositionLimit(UserID user_id, InstrumentID instrument_id,
-                                        Quantity quantity, OrderSide side) const {
-    PositionKey key{user_id, instrument_id};
-    Quantity limit = getPositionLimit(user_id, instrument_id);
-    
-    // For now, we check absolute position size
-    // In production, you'd get current position from PositionManager
-    // This is a simplified check
-    return quantity <= limit;
-}
-
-Quantity PositionManager::getPositionSize(UserID user_id, InstrumentID instrument_id) const {
-    // In production, this would query the actual position
-    // For now, return 0 as placeholder
-    return 0;
 }
 
 Quantity PositionManager::getPositionLimit(UserID user_id, InstrumentID instrument_id) const {
     std::lock_guard<std::mutex> lock(limits_mutex_);
-    
-    PositionKey key{user_id, instrument_id};
+    uint64_t key = makeKey(user_id, instrument_id);
     auto it = position_limits_.find(key);
     if (it != position_limits_.end()) {
         return it->second;
     }
-    
-    return default_limit_;
-}
-
-void PositionManager::setPositionLimit(UserID user_id, InstrumentID instrument_id, Quantity limit) {
-    std::lock_guard<std::mutex> lock(limits_mutex_);
-    PositionKey key{user_id, instrument_id};
-    position_limits_[key] = limit;
+    return 0; // No limit
 }
 
 Quantity PositionManager::calculateNewPositionSize(UserID user_id, InstrumentID instrument_id,
-                                                  Quantity current_size, Quantity order_qty,
-                                                  OrderSide order_side) const {
-    // Calculate new position after order execution
-    if (order_side == OrderSide::BUY) {
-        return current_size + order_qty;
+                                                   Quantity current_size, Quantity trade_size,
+                                                   OrderSide side) const {
+    if (side == OrderSide::BUY) {
+        // Buying increases long position or decreases short position
+        return current_size + trade_size;
     } else {
-        // SELL - reduce position (can go negative for short positions)
-        return current_size - order_qty;
+        // Selling increases short position or decreases long position
+        return current_size - trade_size;
+    }
+}
+
+void PositionManager::updatePosition(UserID user_id, InstrumentID instrument_id,
+                                    Quantity delta, OrderSide side) {
+    std::lock_guard<std::mutex> lock(positions_mutex_);
+    uint64_t key = makeKey(user_id, instrument_id);
+    
+    if (side == OrderSide::BUY) {
+        current_positions_[key] += delta;
+    } else {
+        current_positions_[key] -= delta;
     }
 }
 
 } // namespace perpetual
-
 

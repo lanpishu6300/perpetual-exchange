@@ -788,4 +788,3 @@ RESTAPIServer::HTTPResponse RESTAPIServer::handleRevokeAPIKey(const HTTPRequest&
 }
 
 } // namespace perpetual
-

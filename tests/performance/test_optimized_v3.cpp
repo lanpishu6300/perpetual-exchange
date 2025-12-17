@@ -1,19 +1,29 @@
 #include <iostream>
+#include <iomanip>
 #include <chrono>
 #include <vector>
 #include <thread>
 #include <atomic>
+#include <algorithm>
 #include "core/matching_engine_optimized_v3.h"
 #include "core/order.h"
 #include "core/types.h"
+#if __has_include(<filesystem>)
 #include <filesystem>
+namespace fs = std::filesystem;
+#elif __has_include(<experimental/filesystem>)
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#else
+#error "No filesystem support"
+#endif
 
 using namespace perpetual;
 
 // 测试优化版本V3的性能
 int main(int argc, char* argv[]) {
     int num_threads = 8;
-    int duration_seconds = 10;
+    int duration_seconds = 20;  // 默认20秒
     int orders_per_second = 10000;
     
     if (argc > 1) num_threads = std::stoi(argv[1]);
@@ -35,8 +45,8 @@ int main(int argc, char* argv[]) {
         now.time_since_epoch()).count();
     std::string event_dir = "./test_v3_event_" + std::to_string(timestamp);
     std::string persist_dir = "./test_v3_persist_" + std::to_string(timestamp);
-    std::filesystem::create_directories(event_dir);
-    std::filesystem::create_directories(persist_dir);
+    fs::create_directories(event_dir);
+    fs::create_directories(persist_dir);
     
     MatchingEngineOptimizedV3 engine(1);
     engine.initialize(event_dir, persist_dir);
@@ -137,11 +147,11 @@ int main(int argc, char* argv[]) {
     std::cout << "========================================" << std::endl;
     
     // 清理
-    if (std::filesystem::exists(event_dir)) {
-        std::filesystem::remove_all(event_dir);
+    if (fs::exists(event_dir)) {
+        fs::remove_all(event_dir);
     }
-    if (std::filesystem::exists(persist_dir)) {
-        std::filesystem::remove_all(persist_dir);
+    if (fs::exists(persist_dir)) {
+        fs::remove_all(persist_dir);
     }
     
     return 0;

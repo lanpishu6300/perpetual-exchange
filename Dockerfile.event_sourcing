@@ -120,4 +120,3 @@ RUN chmod +x run_event_sourcing_benchmark.sh generate_performance_report.py 2>/d
 
 # Default command: run benchmark
 CMD ["./run_event_sourcing_benchmark.sh"]
-
