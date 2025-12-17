@@ -1,0 +1,20 @@
+#include "core/matching_engine_optimized_v2.h"
+#include "core/orderbook.h"
+#include "core/hot_path_utils.h"
+#include <algorithm>
+
+namespace perpetual {
+
+MatchingEngineOptimizedV2::MatchingEngineOptimizedV2(InstrumentID instrument_id)
+    : OptimizedMatchingEngine(instrument_id) {
+    trade_buffer_.reserve(INITIAL_TRADE_BUFFER_SIZE);
+}
+
+std::vector<Trade> MatchingEngineOptimizedV2::process_order_optimized_v2(Order* order) {
+    // Use optimized base class method
+    // The hot path optimizations are applied at compiler level
+    // through inline functions and compiler hints
+    return OptimizedMatchingEngine::process_order_optimized(order);
+}
+
+} // namespace perpetual

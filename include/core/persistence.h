@@ -1,7 +1,7 @@
 #pragma once
 
-#include "order.h"
-#include "types.h"
+#include "core/order.h"
+#include "core/types.h"
 #include <string>
 #include <vector>
 #include <memory>
@@ -65,37 +65,4 @@ private:
     bool initialized_ = false;
 };
 
-} // namespace perpetual
-
-#include "order.h"
-#include "types.h"
-#include <string>
-#include <vector>
-#include <memory>
-#include <mutex>
-#include <fstream>
-
-namespace perpetual {
-
-// Trade log entry for persistence
-struct TradeLogEntry {
-    Trade trade;
-    Timestamp timestamp;
-    std::string toCSV() const;
-};
-
-// Order log entry for persistence
-struct OrderLogEntry {
-    OrderID order_id;
-    UserID user_id;
-    InstrumentID instrument_id;
-    OrderSide side;
-    Price price;
-    Quantity quantity;
-    OrderStatus status;
-    Timestamp timestamp;
-    std::string toCSV() const;
-};
-
-// Persistence manager for production data durability
 } // namespace perpetual

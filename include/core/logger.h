@@ -27,6 +27,9 @@ public:
     
     void setOutputFile(const std::string& filename);
     
+    // Initialize logger with file and level
+    void initialize(const std::string& filename, LogLevel level);
+    
     void log(LogLevel level, const std::string& message);
     void debug(const std::string& message);
     void info(const std::string& message);
