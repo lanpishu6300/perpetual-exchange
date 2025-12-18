@@ -3,39 +3,39 @@
 ## Test Overview
 
 - **Version**: production_safe_optimized
-- **Test Date**: 1766082450
+- **Test Date**: 1766082958
 - **Total Orders**: 49000
-- **Duration**: 4103 ms
+- **Duration**: 672 ms
 
 ## Results
 
 | Metric | Value |
 |--------|-------|
-| Throughput | 11.94 K orders/sec |
-| Total Trades | 15 |
-| Trade Rate | 0.03 % |
+| Throughput | 72.92 K orders/sec |
+| Total Trades | 3 |
+| Trade Rate | 0.01 % |
 | Errors | 0 |
 
 ## Latency Statistics
 
 | Percentile | Latency (μs) |
 |------------|---------------|
-| Average | 83.67 |
-| Min | 0.33 |
-| Max | 50318.12 |
-| P50 | 82.88 |
-| P90 | 104.96 |
-| P99 | 332.00 |
+| Average | 13.65 |
+| Min | 3.88 |
+| Max | 2072.29 |
+| P50 | 7.83 |
+| P90 | 27.58 |
+| P99 | 86.67 |
 
 ## WAL Statistics
 
 | Metric | Value |
 |--------|-------|
-| WAL Size | 105779600 bytes |
-| Uncommitted Count | 550935 |
-| Async Writes | 49958 |
-| Sync Count | 77 |
-| Avg Sync Time | 1687.06 μs |
+| WAL Size | 124983680 bytes |
+| Uncommitted Count | 650956 |
+| Async Writes | 49970 |
+| Sync Count | 14 |
+| Avg Sync Time | 988.00 μs |
 | Queue Size | 0 |
 
 ## Performance Comparison
@@ -45,7 +45,7 @@
 | Original | ~300K/s | ~3μs | ❌ |
 | Production Safe | 9.78 K/s | 99.68 μs | ✅✅✅ |
 | Event Sourcing | 418.80 K/s | 1.75 μs | ✅✅ |
-| **Production Safe Optimized** | **11.94 K/s** | **83.67 μs** | **✅✅✅** |
+| **Production Safe Optimized** | **72.92 K/s** | **13.65 μs** | **✅✅✅** |
 
 ## Key Features
 
