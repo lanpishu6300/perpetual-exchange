@@ -21,6 +21,12 @@ set(SAFE_OPTIMIZED_SOURCES
     ${PROJECT_ROOT}/versions/production_safe/src/core/matching_engine_production_v2.cpp
     ${PROJECT_ROOT}/versions/production_safe/src/core/matching_engine_production.cpp
     ${PROJECT_ROOT}/versions/production_safe/src/core/wal_simple.cpp
+    ${PROJECT_ROOT}/versions/production_safe/src/core/matching_engine_art_simd.cpp
+    ${PROJECT_ROOT}/versions/production_safe/src/core/matching_engine_art.cpp
+    ${PROJECT_ROOT}/versions/production_safe/src/core/matching_engine.cpp
+    ${PROJECT_ROOT}/versions/production_safe/src/core/config.cpp
+    ${PROJECT_ROOT}/versions/production_safe/src/core/health_check.cpp
+    ${PROJECT_ROOT}/versions/production_safe/src/core/persistence.cpp
     ${PROJECT_ROOT}/src/core/logger.cpp
     ${PROJECT_ROOT}/src/core/metrics.cpp
     ${PROJECT_ROOT}/src/core/order_validator.cpp
@@ -29,8 +35,10 @@ set(SAFE_OPTIMIZED_SOURCES
     ${PROJECT_ROOT}/src/core/account_manager.cpp
     ${PROJECT_ROOT}/src/core/position_manager.cpp
     ${PROJECT_ROOT}/versions/original/src/orderbook.cpp
-    ${PROJECT_ROOT}/versions/art/src/orderbook_art.cpp
-    ${PROJECT_ROOT}/versions/art_simd/src/orderbook_art_simd.cpp
+    ${PROJECT_ROOT}/versions/production_safe/src/core/orderbook_art.cpp
+    ${PROJECT_ROOT}/versions/production_safe/src/core/art_tree.cpp
+    ${PROJECT_ROOT}/versions/production_safe/src/core/orderbook_art_simd.cpp
+    ${PROJECT_ROOT}/versions/production_safe/src/core/art_tree_simd.cpp
 )
 
 # Create library
@@ -74,6 +82,16 @@ add_executable(production_safe_optimized_benchmark
 )
 
 target_link_libraries(production_safe_optimized_benchmark
+    perpetual_production_safe_optimized
+    pthread
+)
+
+# Zero loss benchmark executable
+add_executable(production_safe_optimized_benchmark_zero_loss
+    ${CMAKE_CURRENT_SOURCE_DIR}/benchmark_zero_loss.cpp
+)
+
+target_link_libraries(production_safe_optimized_benchmark_zero_loss
     perpetual_production_safe_optimized
     pthread
 )

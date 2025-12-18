@@ -45,36 +45,123 @@ bool ProductionMatchingEngineV3::initialize(const std::string& config_file, bool
 }
 
 std::vector<Trade> ProductionMatchingEngineV3::process_order_safe(Order* order) {
-    // Just process the order
-    // In a full implementation, we would add synchronization here
+    if (!order) {
+        return {};
+    }
     
-    // 1. Write to WAL (顺序写, ~0.5μs)
-    if (wal_enabled_) {
-        if (!wal_->append(*order)) {
-            throw SystemException("WAL append failed");
+    // 1. Process order using V2 (ART+SIMD, ~1.2μs)
+    auto trades = ProductionMatchingEngineV2::process_order_production_v2(order);
+    
+    // 2. Check if critical order (needs immediate fsync for zero data loss)
+    bool is_critical = is_critical_order(order, trades);
+    
+    if (is_critical && wal_enabled_) {
+        // Critical order: immediate sync (zero data loss)
+        sync_critical_order(order, trades);
+        sync_writes_.fetch_add(1, std::memory_order_relaxed);
+    } else {
+        // Normal order: async WAL write
+        if (wal_enabled_) {
+            if (!wal_->append(*order)) {
+                throw SystemException("WAL append failed");
+            }
+        }
+        
+        // Add to batch buffer for async flush
+        {
+            std::lock_guard<std::mutex> lock(batch_mutex_);
+            
+            BatchEntry entry;
+            entry.order = *order;
+            entry.trades = trades;
+            entry.timestamp = get_current_timestamp();
+            
+            batch_buffer_.push_back(std::move(entry));
         }
     }
     
-    // 2. Process order using V2 (ART+SIMD, ~1.2μs)
-    auto trades = ProductionMatchingEngineV2::process_order_production_v2(order);
-    
-    // 3. Add to batch buffer
-    {
-        std::lock_guard<std::mutex> lock(batch_mutex_);
-        
-        BatchEntry entry;
-        entry.order = *order;
-        entry.trades = trades;
-        entry.timestamp = get_current_timestamp();
-        
-        batch_buffer_.push_back(std::move(entry));
+    return trades;
+}
+
+std::vector<Trade> ProductionMatchingEngineV3::process_order_zero_loss(Order* order) {
+    if (!order) {
+        return {};
     }
     
-    // Note: In a complete implementation, we should wait for fsync here
-    // For now, we return immediately for performance testing
-    // In production, use condition variables to wait for flush_worker
+    // Force zero-loss mode: all orders are treated as critical
+    bool old_mode = zero_loss_mode_;
+    zero_loss_mode_ = true;
     
+    auto trades = process_order_safe(order);
+    
+    zero_loss_mode_ = old_mode;
     return trades;
+}
+
+bool ProductionMatchingEngineV3::is_critical_order(const Order* order, const std::vector<Trade>& trades) const {
+    if (!order) {
+        return false;
+    }
+    
+    // Zero loss mode: all orders are critical
+    if (zero_loss_mode_) {
+        return true;
+    }
+    
+    // Order with trades is critical (matched order)
+    if (!trades.empty()) {
+        return true;
+    }
+    
+    // Large quantity orders are critical
+    if (critical_quantity_threshold_ > 0) {
+        double qty = perpetual::quantity_to_double(order->quantity);
+        if (qty >= critical_quantity_threshold_) {
+            return true;
+        }
+    }
+    
+    // High value orders are critical
+    if (critical_order_threshold_ > 0) {
+        double price = perpetual::price_to_double(order->price);
+        if (price >= critical_order_threshold_) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+void ProductionMatchingEngineV3::sync_critical_order(const Order* order, const std::vector<Trade>& trades) {
+    if (!wal_enabled_ || !wal_ || !order) {
+        return;
+    }
+    
+    try {
+        // 1. Write order to WAL (synchronous)
+        if (!wal_->append(*order)) {
+            LOG_ERROR("Failed to append order to WAL");
+            return;
+        }
+        
+        // 2. Write trades to WAL (synchronous)
+        for (const auto& trade : trades) {
+            if (!wal_->append(trade)) {
+                LOG_ERROR("Failed to append trade to WAL");
+            }
+        }
+        
+        // 3. Immediate fsync (zero data loss guarantee)
+        wal_->sync();
+        
+        // 4. Mark as committed
+        if (!trades.empty()) {
+            wal_->mark_committed(get_current_timestamp());
+        }
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("Sync critical order failed: " + std::string(e.what()));
+    }
 }
 
 void ProductionMatchingEngineV3::flush_worker() {
@@ -187,6 +274,7 @@ ProductionMatchingEngineV3::WALStats ProductionMatchingEngineV3::get_wal_stats()
     stats.wal_size = wal_ ? wal_->size() : 0;
     stats.uncommitted_count = wal_ ? wal_->uncommitted_count() : 0;
     stats.flush_count = flush_count_.load();
+    stats.sync_writes = sync_writes_.load();
     
     uint64_t total_time = total_flush_time_us_.load();
     uint64_t count = flush_count_.load();

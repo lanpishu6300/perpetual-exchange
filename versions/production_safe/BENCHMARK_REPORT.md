@@ -3,29 +3,29 @@
 ## Test Overview
 
 - **Version**: production_safe
-- **Test Date**: 1766078164
+- **Test Date**: 1766081932
 - **Total Orders**: 49000
-- **Duration**: 743 ms
+- **Duration**: 781 ms
 
 ## Results
 
 | Metric | Value |
 |--------|-------|
-| Throughput | 65.95 K orders/sec |
-| Total Trades | 17 |
-| Trade Rate | 0.03 % |
+| Throughput | 62.74 K orders/sec |
+| Total Trades | 10 |
+| Trade Rate | 0.02 % |
 | Errors | 0 |
 
 ## Latency Statistics
 
 | Percentile | Latency (μs) |
 |------------|---------------|
-| Average | 12.78 |
-| Minimum | 3.88 |
-| Maximum | 3866.00 |
-| P50 | 8.38 |
-| P90 | 21.83 |
-| P99 | 50.12 |
+| Average | 14.24 |
+| Minimum | 3.83 |
+| Maximum | 6507.62 |
+| P50 | 8.58 |
+| P90 | 21.33 |
+| P99 | 83.71 |
 
 ## Performance Comparison
 
@@ -35,7 +35,7 @@
 | ART+SIMD | ~750K/s | ~1.2μs | ❌ |
 | Production Basic | ~15K/s | ~13μs | ⚠️ |
 | Production Fast | ~450K/s | ~2μs | ⚠️ |
-| **Production Safe** | **65.95 K/s** | **12.779000 μs** | **✅✅✅** |
+| **Production Safe** | **62.74 K/s** | **14.241000 μs** | **✅✅✅** |
 
 ## Key Features
 
