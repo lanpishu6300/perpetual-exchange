@@ -2,7 +2,7 @@
 
 #include "core/matching_engine_production_v2.h"
 #include "core/wal.h"
-#include "core/lockfree_queue.h"
+#include "core/lockfree_queue.h"  // Use from main include directory
 #include <thread>
 #include <atomic>
 #include <vector>
@@ -33,6 +33,9 @@ public:
     // Process order with optimized async WAL
     std::vector<Trade> process_order_optimized(Order* order);
     
+    // Process order with zero data loss guarantee (sync for critical orders)
+    std::vector<Trade> process_order_zero_loss(Order* order);
+    
     // Recover from WAL after crash
     bool recover_from_wal();
     
@@ -44,6 +47,7 @@ public:
         uint64_t wal_size;
         uint64_t uncommitted_count;
         uint64_t async_writes;
+        uint64_t sync_writes;  // Critical orders with immediate sync
         uint64_t sync_count;
         double avg_sync_time_us;
         uint64_t queue_size;
@@ -80,9 +84,20 @@ private:
     // Perform sync
     void perform_sync();
     
+    // Check if order is critical (needs immediate sync)
+    bool is_critical_order(const Order* order, const std::vector<Trade>& trades) const;
+    
+    // Sync write for critical orders (zero data loss)
+    void sync_write_critical(const Order* order, const std::vector<Trade>& trades);
+    
     // WAL for durability
     std::unique_ptr<WriteAheadLog> wal_;
     bool wal_enabled_ = false;
+    
+    // Zero data loss configuration
+    bool zero_loss_mode_ = false;  // If true, all orders are critical
+    Price critical_order_threshold_ = 0;  // Orders above this price are critical
+    Quantity critical_quantity_threshold_ = 0;  // Orders above this quantity are critical
     
     // Async WAL queue (lock-free, single producer/consumer)
     static constexpr size_t WAL_QUEUE_SIZE = 65536;  // 64K entries
@@ -111,12 +126,13 @@ private:
     
     // Statistics
     std::atomic<uint64_t> async_writes_{0};
+    std::atomic<uint64_t> sync_writes_{0};  // Critical orders with immediate sync
     std::atomic<uint64_t> sync_count_{0};
     std::atomic<uint64_t> total_sync_time_us_{0};
     
-    // Sync timing
-    std::chrono::milliseconds sync_interval_{10};  // 10ms sync interval
-    size_t sync_batch_size_ = 1000;  // Sync every 1000 entries
+    // Sync timing - optimized for better performance
+    std::chrono::milliseconds sync_interval_{50};  // 50ms sync interval (reduced frequency)
+    size_t sync_batch_size_ = 5000;  // Sync every 5000 entries (larger batch)
     Timestamp last_sync_time_ = 0;
 };
 

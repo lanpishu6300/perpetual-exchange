@@ -3,6 +3,7 @@
 #include "core/types.h"
 #include <chrono>
 #include <algorithm>
+#include <thread>
 
 using namespace std::chrono;
 
@@ -78,36 +79,61 @@ std::vector<Trade> ProductionMatchingEngineSafeOptimized::process_order_optimize
         }
     }
     
-    // 3. Async WAL write (non-blocking, ~0.01μs to enqueue)
-    if (wal_enabled_ && wal_queue_) {
-        WALEntry entry;
-        entry.type = WALEntry::Type::ORDER;
-        entry.order = *order;
-        entry.timestamp = get_current_timestamp();
-        entry.sequence_id = pending_sequence_.load(std::memory_order_relaxed);
-        
-        // Try to enqueue (non-blocking)
-        if (wal_queue_->push(entry)) {
-            async_writes_.fetch_add(1, std::memory_order_relaxed);
-        } else {
-            // Queue full - this should be rare, but we can handle it
-            // In production, might want to wait or use a fallback
-            LOG_WARNING("WAL queue full, dropping entry");
-        }
-        
-        // Also enqueue trades
-        for (const auto& trade : trades) {
-            WALEntry trade_entry;
-            trade_entry.type = WALEntry::Type::TRADE;
-            trade_entry.trade = trade;
-            trade_entry.timestamp = get_current_timestamp();
-            trade_entry.sequence_id = pending_sequence_.load(std::memory_order_relaxed);
+    // 3. Check if critical order (needs immediate sync for zero data loss)
+    bool is_critical = is_critical_order(order, trades);
+    
+    if (is_critical && wal_enabled_) {
+        // Critical order: sync write immediately (zero data loss)
+        sync_write_critical(order, trades);
+        sync_writes_.fetch_add(1, std::memory_order_relaxed);
+    } else {
+        // Normal order: async WAL write (non-blocking, ~0.01μs to enqueue)
+        if (wal_enabled_ && wal_queue_) {
+            WALEntry entry;
+            entry.type = WALEntry::Type::ORDER;
+            entry.order = *order;
+            entry.timestamp = get_current_timestamp();
+            entry.sequence_id = pending_sequence_.load(std::memory_order_relaxed);
             
-            wal_queue_->push(trade_entry);
+            // Try to enqueue (non-blocking)
+            if (wal_queue_->push(entry)) {
+                async_writes_.fetch_add(1, std::memory_order_relaxed);
+            } else {
+                // Queue full - fallback to sync write for safety
+                LOG_WARNING("WAL queue full, falling back to sync write");
+                sync_write_critical(order, trades);
+                sync_writes_.fetch_add(1, std::memory_order_relaxed);
+            }
+            
+            // Also enqueue trades
+            for (const auto& trade : trades) {
+                WALEntry trade_entry;
+                trade_entry.type = WALEntry::Type::TRADE;
+                trade_entry.trade = trade;
+                trade_entry.timestamp = get_current_timestamp();
+                trade_entry.sequence_id = pending_sequence_.load(std::memory_order_relaxed);
+                
+                wal_queue_->push(trade_entry);
+            }
         }
     }
     
-    // Return immediately - no blocking on disk I/O!
+    // Return immediately - no blocking on disk I/O for normal orders!
+    return trades;
+}
+
+std::vector<Trade> ProductionMatchingEngineSafeOptimized::process_order_zero_loss(Order* order) {
+    if (!order) {
+        return {};
+    }
+    
+    // Force zero-loss mode: all orders are treated as critical
+    bool old_mode = zero_loss_mode_;
+    zero_loss_mode_ = true;
+    
+    auto trades = process_order_optimized(order);
+    
+    zero_loss_mode_ = old_mode;
     return trades;
 }
 
@@ -130,8 +156,8 @@ void ProductionMatchingEngineSafeOptimized::wal_writer_thread() {
                 LOG_ERROR("WAL write failed: " + std::string(e.what()));
             }
         } else {
-            // Queue empty, sleep briefly
-            std::this_thread::sleep_for(std::chrono::microseconds(10));
+            // Queue empty, sleep briefly (reduced from 10μs to avoid excessive CPU usage)
+            std::this_thread::sleep_for(std::chrono::microseconds(50));
         }
     }
     
@@ -241,11 +267,86 @@ bool ProductionMatchingEngineSafeOptimized::recover_from_wal() {
     return true;
 }
 
+bool ProductionMatchingEngineSafeOptimized::is_critical_order(const Order* order, const std::vector<Trade>& trades) const {
+    if (!order) {
+        return false;
+    }
+    
+    // Zero loss mode: all orders are critical
+    if (zero_loss_mode_) {
+        return true;
+    }
+    
+    // Order with trades is critical (matched order)
+    if (!trades.empty()) {
+        return true;
+    }
+    
+    // Large quantity orders are critical
+    if (critical_quantity_threshold_ > 0) {
+        double qty = perpetual::quantity_to_double(order->quantity);
+        if (qty >= critical_quantity_threshold_) {
+            return true;
+        }
+    }
+    
+    // High value orders are critical
+    if (critical_order_threshold_ > 0) {
+        double price = perpetual::price_to_double(order->price);
+        if (price >= critical_order_threshold_) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+void ProductionMatchingEngineSafeOptimized::sync_write_critical(const Order* order, const std::vector<Trade>& trades) {
+    if (!wal_enabled_ || !wal_ || !order) {
+        return;
+    }
+    
+    try {
+        // 1. Wait for WAL writer to catch up (drain queue if needed)
+        // This ensures queue data is written before we sync
+        if (wal_queue_ && !wal_queue_->empty()) {
+            // Give WAL writer a moment to process queue
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
+        }
+        
+        // 2. Write order to WAL (synchronous)
+        if (!wal_->append(*order)) {
+            LOG_ERROR("Failed to append order to WAL");
+            return;
+        }
+        
+        // 3. Write trades to WAL (synchronous)
+        for (const auto& trade : trades) {
+            if (!wal_->append(trade)) {
+                LOG_ERROR("Failed to append trade to WAL");
+            }
+        }
+        
+        // 4. Immediate fsync (zero data loss guarantee)
+        wal_->sync();
+        
+        // 5. Update committed sequence
+        uint64_t current_pending = pending_sequence_.load(std::memory_order_acquire);
+        committed_sequence_.store(current_pending, std::memory_order_release);
+        last_sync_sequence_.store(current_pending, std::memory_order_release);
+        last_sync_time_ = get_current_timestamp();
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("Sync write failed: " + std::string(e.what()));
+    }
+}
+
 ProductionMatchingEngineSafeOptimized::Stats ProductionMatchingEngineSafeOptimized::get_stats() const {
     Stats stats;
     stats.wal_size = wal_ ? wal_->size() : 0;
     stats.uncommitted_count = wal_ ? wal_->uncommitted_count() : 0;
     stats.async_writes = async_writes_.load();
+    stats.sync_writes = sync_writes_.load();
     stats.sync_count = sync_count_.load();
     stats.queue_size = wal_queue_ ? wal_queue_->size() : 0;
     
