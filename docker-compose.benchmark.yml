@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  benchmark-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.benchmark
+    platform: linux/amd64
+    volumes:
+      # Mount reports directory to host
+      - ./benchmark_reports:/app/reports
+      # Mount versions directory as writable so we can rebuild if needed
+      - ./versions:/app/versions
+    environment:
+      - NUM_ORDERS=50000
+    command: ["/app/run_all_benchmarks.sh", "50000"]
+    # Uncomment to run with different number of orders
+    # command: ["/app/run_all_benchmarks.sh", "100000"]
+
+  # Individual version benchmarks (optional - run specific version)
+  original-benchmark:
+    build:
+      context: .
+      dockerfile: Dockerfile.benchmark
+    platform: linux/amd64
+    volumes:
+      - ./benchmark_reports:/app/reports
+      - ./versions:/app/versions:ro
+    command: ["bash", "-c", "cd /app/versions/original && /app/benchmarks/original_benchmark 50000 > /app/reports/original_BENCHMARK_REPORT.md 2>&1"]
+    profiles:
+      - single
+
+  optimized-benchmark:
+    build:
+      context: .
+      dockerfile: Dockerfile.benchmark
+    platform: linux/amd64
+    volumes:
+      - ./benchmark_reports:/app/reports
+      - ./versions:/app/versions:ro
+    command: ["bash", "-c", "cd /app/versions/optimized && /app/benchmarks/optimized_benchmark 50000 > /app/reports/optimized_BENCHMARK_REPORT.md 2>&1"]
+    profiles:
+      - single
+
+  art-benchmark:
+    build:
+      context: .
+      dockerfile: Dockerfile.benchmark
+    platform: linux/amd64
+    volumes:
+      - ./benchmark_reports:/app/reports
+      - ./versions:/app/versions:ro
+    command: ["bash", "-c", "cd /app/versions/art && /app/benchmarks/art_benchmark 50000 > /app/reports/art_BENCHMARK_REPORT.md 2>&1"]
+    profiles:
+      - single
+
+  production-fast-benchmark:
+    build:
+      context: .
+      dockerfile: Dockerfile.benchmark
+    platform: linux/amd64
+    volumes:
+      - ./benchmark_reports:/app/reports
+      - ./versions:/app/versions:ro
+    command: ["bash", "-c", "cd /app/versions/production_fast && /app/benchmarks/production_fast_benchmark 50000 > /app/reports/production_fast_BENCHMARK_REPORT.md 2>&1"]
+    profiles:
+      - single
+
+  production-safe-benchmark:
+    build:
+      context: .
+      dockerfile: Dockerfile.benchmark
+    platform: linux/amd64
+    volumes:
+      - ./benchmark_reports:/app/reports
+      - ./versions:/app/versions:ro
+    command: ["bash", "-c", "cd /app/versions/production_safe && /app/benchmarks/production_safe_benchmark 50000 > /app/reports/production_safe_BENCHMARK_REPORT.md 2>&1"]
+    profiles:
+      - single
+

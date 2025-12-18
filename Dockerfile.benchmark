@@ -1,0 +1,70 @@
+# Dockerfile for running benchmarks for all versions
+FROM --platform=linux/amd64 ubuntu:22.04 AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    g++ \
+    make \
+    git \
+    bash \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy entire project (exclude build directories to speed up)
+COPY . .
+RUN find . -type d -name "build" -exec rm -rf {} + 2>/dev/null || true
+
+# Build all version benchmarks using bash
+RUN bash -c 'echo "Building all version benchmarks..." && \
+    VERSIONS="original optimized optimized_v2 art art_simd event_sourcing production_basic production_fast production_safe" && \
+    for version in $VERSIONS; do \
+        echo "Building $version benchmark..."; \
+        VERSION_DIR="versions/$version"; \
+        if [ -d "$VERSION_DIR" ] && [ -f "$VERSION_DIR/CMakeLists.txt" ]; then \
+            BUILD_DIR="$VERSION_DIR/build"; \
+            mkdir -p "$BUILD_DIR"; \
+            cd "$BUILD_DIR" && \
+            cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-O3 -flto -funroll-loops" && \
+            make ${version}_benchmark -j$(nproc) 2>&1 | tail -5 || echo "Failed to build $version benchmark"; \
+            cd /app; \
+        else \
+            echo "Skipping $version (no CMakeLists.txt)"; \
+        fi; \
+    done'
+
+# Runtime stage - include build tools so we can rebuild if needed
+FROM --platform=linux/amd64 ubuntu:22.04
+
+# Install runtime AND build dependencies (so we can rebuild in container)
+RUN apt-get update && apt-get install -y \
+    libstdc++6 \
+    ca-certificates \
+    bash \
+    build-essential \
+    cmake \
+    g++ \
+    make \
+    file \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy entire versions directory with built benchmarks
+COPY --from=builder /app/versions /app/versions
+
+# Copy scripts
+COPY run_all_benchmarks.sh /app/
+COPY generate_benchmark_report.sh /app/
+
+# Create output directory for reports
+RUN mkdir -p /app/reports /app/benchmarks
+
+# Make scripts executable
+RUN chmod +x /app/run_all_benchmarks.sh /app/generate_benchmark_report.sh 2>/dev/null || true
+
+# Default command: run all benchmarks
+CMD ["/app/run_all_benchmarks.sh"]

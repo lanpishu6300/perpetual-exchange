@@ -13,7 +13,8 @@ ProductionMatchingEngineV3::~ProductionMatchingEngineV3() {
     shutdown();
 }
 
-bool ProductionMatchingEngineV3::initialize(const std::string& config_file, bool enable_wal) {
+bool ProductionMatchingEngineV3::initialize(const std::string& config_file) {
+    bool enable_wal = true;
     // Initialize V2 first
     if (!ProductionMatchingEngineV2::initialize(config_file)) {
         return false;
@@ -44,7 +45,7 @@ bool ProductionMatchingEngineV3::initialize(const std::string& config_file, bool
     return true;
 }
 
-std::vector<Trade> ProductionMatchingEngineV3::process_order_safe(Order* order) {
+std::vector<Trade> ProductionMatchingEngineV3::process_order_production_v3(Order* order) {
     // Just process the order
     // In a full implementation, we would add synchronization here
     
@@ -60,14 +61,9 @@ std::vector<Trade> ProductionMatchingEngineV3::process_order_safe(Order* order) 
     
     // 3. Add to batch buffer
     {
-        std::lock_guard<std::mutex> lock(batch_mutex_);
+        std::lock_guard<std::mutex> lock(pending_mutex_);
         
-        BatchEntry entry;
-        entry.order = *order;
-        entry.trades = trades;
-        entry.timestamp = get_current_timestamp();
-        
-        batch_buffer_.push_back(std::move(entry));
+        pending_wal_entries_.push_back(std::make_pair(*order, trades));
     }
     
     // Note: In a complete implementation, we should wait for fsync here
@@ -83,15 +79,15 @@ void ProductionMatchingEngineV3::flush_worker() {
     while (flush_running_.load(std::memory_order_relaxed)) {
         auto flush_start = high_resolution_clock::now();
         
-        std::vector<BatchEntry> to_flush;
+        std::vector<std::pair<Order, std::vector<Trade>>> to_flush;
         
         // 1. Collect batch
         {
-            std::lock_guard<std::mutex> lock(batch_mutex_);
+            std::lock_guard<std::mutex> lock(pending_mutex_);
             
-            if (should_flush()) {
-                to_flush = std::move(batch_buffer_);
-                batch_buffer_.clear();
+            if (pending_wal_entries_.size() >= WAL_BATCH_SIZE) {
+                to_flush = std::move(pending_wal_entries_);
+                pending_wal_entries_.clear();
             }
         }
         
@@ -105,7 +101,7 @@ void ProductionMatchingEngineV3::flush_worker() {
                 
                 // 4. Mark committed
                 if (wal_enabled_ && !to_flush.empty()) {
-                    wal_->mark_committed(to_flush.back().timestamp);
+                    wal_->mark_committed(get_current_timestamp());
                 }
                 
                 auto flush_end = high_resolution_clock::now();
@@ -115,7 +111,7 @@ void ProductionMatchingEngineV3::flush_worker() {
                 flush_count_.fetch_add(1);
                 total_flush_time_us_.fetch_add(flush_time.count());
                 
-                last_flush_time_ = to_flush.back().timestamp;
+                last_flush_time_ = get_current_timestamp();
                 
             } catch (const std::exception& e) {
                 LOG_ERROR("Flush failed: " + std::string(e.what()));
@@ -129,29 +125,7 @@ void ProductionMatchingEngineV3::flush_worker() {
     LOG_INFO("Flush worker thread stopped");
 }
 
-bool ProductionMatchingEngineV3::should_flush() const {
-    // Trigger condition 1: batch size
-    if (batch_buffer_.size() >= batch_size_) {
-        return true;
-    }
-    
-    // Trigger condition 2: timeout
-    if (!batch_buffer_.empty()) {
-        auto oldest = batch_buffer_.front().timestamp;
-        auto now = get_current_timestamp();
-        if (now - oldest > static_cast<uint64_t>(batch_timeout_.count() * 1000000)) {
-            return true;
-        }
-    }
-    
-    return false;
-}
-
-void ProductionMatchingEngineV3::flush_batch() {
-    // Called by flush_worker
-}
-
-bool ProductionMatchingEngineV3::recover_from_wal() {
+bool ProductionMatchingEngineV3::recoverFromWAL() {
     if (!wal_enabled_) {
         return true;
     }
@@ -170,7 +144,7 @@ bool ProductionMatchingEngineV3::recover_from_wal() {
     size_t recovered = 0;
     for (auto& order : uncommitted_orders) {
         try {
-            auto trades = process_order_safe(&order);
+            auto trades = process_order_production_v3(&order);
             recovered++;
         } catch (const std::exception& e) {
             LOG_ERROR("Failed to recover order: " + std::string(e.what()));
@@ -182,18 +156,6 @@ bool ProductionMatchingEngineV3::recover_from_wal() {
     return true;
 }
 
-ProductionMatchingEngineV3::WALStats ProductionMatchingEngineV3::get_wal_stats() const {
-    WALStats stats;
-    stats.wal_size = wal_ ? wal_->size() : 0;
-    stats.uncommitted_count = wal_ ? wal_->uncommitted_count() : 0;
-    stats.flush_count = flush_count_.load();
-    
-    uint64_t total_time = total_flush_time_us_.load();
-    uint64_t count = flush_count_.load();
-    stats.avg_flush_time_us = count > 0 ? static_cast<double>(total_time) / count : 0.0;
-    
-    return stats;
-}
 
 void ProductionMatchingEngineV3::shutdown() {
     if (flush_running_.exchange(false)) {

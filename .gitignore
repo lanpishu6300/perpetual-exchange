@@ -5,123 +5,62 @@ cmake-build-*/
 
 # Compiled files
 *.o
-*.obj
-*.exe
-*.out
-*.app
+*.a
 *.so
 *.dylib
 *.dll
-*.a
-*.lib
+*.exe
 
 # CMake
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
-Makefile
 *.cmake
 !CMakeLists.txt
 
 # IDE
-.vscode/
 .idea/
+.vscode/
 *.swp
 *.swo
 *~
 .DS_Store
 
-# Logs and data
-logs/
-data/
+# Test outputs
+test_*/
+test_results/
 *.log
-*.log.*
-
-# Config files (keep example)
-config.ini
-!config.ini.example
-
-# Test output
-test_output/
-benchmark_output.txt
 *.txt
-!README*.txt
-
-# Temporary files
-tmp/
-temp/
-*.tmp
-
-# Coverage
-*.gcov
-*.gcda
-*.gcno
-coverage/
-
-# Backup files
-*.bak
-*.backup
-*~
-
-cmake-build-*/
-*.build/
-
-# Compiled files
-*.o
-*.obj
-*.exe
-*.out
-*.app
-*.so
-*.dylib
-*.dll
-*.a
-*.lib
-
-# CMake
-CMakeCache.txt
-CMakeFiles/
-cmake_install.cmake
-Makefile
-*.cmake
 !CMakeLists.txt
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
+# Benchmark outputs
+benchmark_data/
+benchmark_results/
+*.benchmark
 
-# Logs and data
-logs/
-data/
-*.log
-*.log.*
+# Docker
+.dockerignore
 
-# Config files (keep example)
-config.ini
-!config.ini.example
-
-# Test output
-test_output/
-benchmark_output.txt
-*.txt
-!README*.txt
+# Documentation builds
+docs/_build/
+site/
 
 # Temporary files
-tmp/
-temp/
 *.tmp
+*.bak
+*.bak*
+
+# Data files
+data/
+*.db
+*.sqlite
+
+# Environment
+.env
+.env.local
 
 # Coverage
+coverage/
 *.gcov
 *.gcda
 *.gcno
-coverage/
-
-# Backup files
-*.bak
-*.backup
-*~
