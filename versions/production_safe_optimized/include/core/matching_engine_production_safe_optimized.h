@@ -36,6 +36,9 @@ public:
     // Process order with zero data loss guarantee (sync for critical orders)
     std::vector<Trade> process_order_zero_loss(Order* order);
     
+    // Process order with guaranteed zero data loss (all orders sync, slower but safe)
+    std::vector<Trade> process_order_guaranteed_zero_loss(Order* order);
+    
     // Recover from WAL after crash
     bool recover_from_wal();
     
@@ -90,6 +93,9 @@ private:
     // Sync write for critical orders (zero data loss)
     void sync_write_critical(const Order* order, const std::vector<Trade>& trades);
     
+    // Ensure WAL entry is written to file (for zero data loss guarantee)
+    void ensure_wal_written(uint64_t sequence_id);
+    
     // WAL for durability
     std::unique_ptr<WriteAheadLog> wal_;
     bool wal_enabled_ = false;
@@ -118,6 +124,7 @@ private:
     std::atomic<uint64_t> last_sync_sequence_{0};
     std::atomic<uint64_t> pending_sequence_{0};
     std::atomic<uint64_t> committed_sequence_{0};
+    std::atomic<uint64_t> last_written_sequence_{0};  // Last sequence written to WAL file
     
     // Worker threads
     std::thread wal_writer_thread_;
