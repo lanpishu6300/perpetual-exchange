@@ -1,0 +1,26 @@
+name: I18n Check
+
+on:
+  pull_request:
+    paths:
+      - '*.md'
+      - 'README*'
+      - 'docs/**'
+      - 'benchmark_reports/**'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Check i18n files
+        run: |
+          echo "Checking i18n file pairs..."
+          if [ -f "README.md" ] && [ ! -f "README.zh-CN.md" ]; then
+            echo "⚠️ Warning: README.md exists but README.zh-CN.md is missing"
+          fi
+          if [ -f "BENCHMARK_GUIDE.md" ] && [ ! -f "BENCHMARK_GUIDE.zh-CN.md" ]; then
+            echo "⚠️ Warning: BENCHMARK_GUIDE.md exists but BENCHMARK_GUIDE.zh-CN.md is missing"
+          fi
+          echo "✅ i18n check completed"
+

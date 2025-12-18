@@ -1,0 +1,11 @@
+build/
+**/build/
+*.o
+*.a
+.git/
+.gitignore
+benchmark_reports/
+*.md.bak*
+__pycache__/
+*.pyc
+.DS_Store
