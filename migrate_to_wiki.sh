@@ -3,7 +3,7 @@
 # GitHub Wiki 迁移脚本
 # 将设计文档迁移到 GitHub Wiki
 
-REPO_URL="https://github.com/lanpishu6300/matching-engine.git"
+REPO_URL="https://github.com/[username]/matching-engine.git"
 WIKI_URL="${REPO_URL%.git}.wiki.git"
 WIKI_DIR="/tmp/matching-engine-wiki"
 PROJECT_ROOT="/Users/lan/Downloads/perpetual_exchange"

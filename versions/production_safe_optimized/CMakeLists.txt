@@ -18,6 +18,8 @@ include_directories(
 # Source files
 set(SAFE_OPTIMIZED_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/matching_engine_production_safe_optimized.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/sharded_matching_engine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/trading_shard.cpp
     ${PROJECT_ROOT}/versions/production_safe/src/core/matching_engine_production_v2.cpp
     ${PROJECT_ROOT}/versions/production_safe/src/core/matching_engine_production.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core/wal_simple.cpp
@@ -34,6 +36,7 @@ set(SAFE_OPTIMIZED_SOURCES
     ${PROJECT_ROOT}/src/core/account.cpp
     ${PROJECT_ROOT}/src/core/account_manager.cpp
     ${PROJECT_ROOT}/src/core/position_manager.cpp
+    ${PROJECT_ROOT}/src/core/liquidation_engine.cpp
     ${PROJECT_ROOT}/versions/original/src/orderbook.cpp
     ${PROJECT_ROOT}/versions/production_safe/src/core/orderbook_art.cpp
     ${PROJECT_ROOT}/versions/production_safe/src/core/art_tree.cpp
@@ -102,6 +105,36 @@ add_executable(production_safe_optimized_realtime_benchmark
 )
 
 target_link_libraries(production_safe_optimized_realtime_benchmark
+    perpetual_production_safe_optimized
+    pthread
+)
+
+# Sharded benchmark executable
+add_executable(production_safe_optimized_sharded_benchmark
+    ${CMAKE_CURRENT_SOURCE_DIR}/sharded_benchmark.cpp
+)
+
+target_link_libraries(production_safe_optimized_sharded_benchmark
+    perpetual_production_safe_optimized
+    pthread
+)
+
+# Sharded engine unit test
+add_executable(production_safe_optimized_sharded_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_sharded_engine.cpp
+)
+
+target_link_libraries(production_safe_optimized_sharded_test
+    perpetual_production_safe_optimized
+    pthread
+)
+
+# Quick stress test
+add_executable(production_safe_optimized_quick_stress_test
+    ${CMAKE_CURRENT_SOURCE_DIR}/quick_stress_test.cpp
+)
+
+target_link_libraries(production_safe_optimized_quick_stress_test
     perpetual_production_safe_optimized
     pthread
 )
