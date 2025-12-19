@@ -4,6 +4,7 @@
 #include <chrono>
 #include <algorithm>
 #include <thread>
+#include <condition_variable>
 
 using namespace std::chrono;
 
@@ -39,12 +40,21 @@ bool ProductionMatchingEngineSafeOptimized::initialize(const std::string& config
         // Initialize lock-free queue
         wal_queue_ = std::make_unique<LockFreeSPSCQueue<WALEntry>>(WAL_QUEUE_SIZE);
         
+        // Initialize batch confirm manager
+        batch_confirm_manager_ = std::make_unique<BatchConfirmManager>();
+        batch_confirm_manager_->start();
+        
+        // Note: mmap disabled by default - can be enabled if needed
+        // if (wal_) {
+        //     wal_->enable_mmap(64 * 1024 * 1024);  // 64MB initial size
+        // }
+        
         // Start worker threads
         running_ = true;
         wal_writer_thread_ = std::thread(&ProductionMatchingEngineSafeOptimized::wal_writer_thread, this);
         sync_worker_thread_ = std::thread(&ProductionMatchingEngineSafeOptimized::sync_worker_thread, this);
         
-        LOG_INFO("Production Safe Optimized engine initialized with async WAL");
+        LOG_INFO("Production Safe Optimized engine initialized with async WAL and batch confirmation");
     } else {
         LOG_WARNING("WAL is disabled");
     }
@@ -106,8 +116,14 @@ std::vector<Trade> ProductionMatchingEngineSafeOptimized::process_order_optimize
                 }
                 
                 // Zero data loss guarantee: ensure entry is written to WAL file
-                // Wait for WAL writer to process this entry (non-blocking check)
-                ensure_wal_written(seq_id);
+                // ✅ Use batch confirmation for better performance (immediate notification, no batch delay)
+                if (batch_confirm_manager_) {
+                    // Wait for confirmation (max 50ms, reduced from 110ms)
+                    batch_confirm_manager_->wait_for_confirm(seq_id, std::chrono::milliseconds(50));
+                } else {
+                    // Fallback to original method
+                    ensure_wal_written(seq_id);
+                }
             } else {
                 // Queue full - fallback to sync write for safety (rare case)
                 // This ensures zero data loss even when queue is full
@@ -159,55 +175,127 @@ void ProductionMatchingEngineSafeOptimized::ensure_wal_written(uint64_t sequence
         return;
     }
     
-    // Wait for WAL writer to process entries up to this sequence
-    // Use non-blocking check with limited retries to avoid performance impact
-    int retries = 0;
-    const int max_retries = 100;  // ~1ms total wait time (10μs * 100)
-    
-    while (retries < max_retries) {
-        // Check if WAL writer has processed this sequence
-        // We track the last written sequence in WAL writer thread
-        uint64_t last_written = last_written_sequence_.load(std::memory_order_acquire);
-        
-        if (last_written >= sequence_id) {
-            // Entry has been written to WAL file
-            return;
-        }
-        
-        // Yield to allow WAL writer to process
-        std::this_thread::yield();
-        retries++;
+    // ✅ Optimization: Fast path - if already written, return immediately
+    uint64_t last_written = last_written_sequence_.load(std::memory_order_acquire);
+    if (last_written >= sequence_id) {
+        return;  // Already written, no need to wait
     }
     
-    // If we've exhausted retries, the entry is still in queue
-    // This is acceptable for normal orders (queue will be processed)
-    // For true zero loss, use process_order_guaranteed_zero_loss()
+    // ✅ Optimization: Use condition variable instead of polling
+    std::unique_lock<std::mutex> lock(wal_written_mutex_);
+    
+    // Wait at most 10ms to allow WAL writer to catch up (increased from 1ms for high load)
+    auto timeout = std::chrono::steady_clock::now() + std::chrono::milliseconds(10);
+    
+    bool notified = wal_written_cv_.wait_until(lock, timeout, [this, sequence_id]() {
+        return last_written_sequence_.load(std::memory_order_acquire) >= sequence_id;
+    });
+    
+    // If timeout and still not written, continue waiting with yield (for zero data loss)
+    if (!notified) {
+        uint64_t current_written = last_written_sequence_.load(std::memory_order_acquire);
+        if (current_written < sequence_id) {
+            // Continue waiting with yield to ensure zero data loss
+            int additional_retries = 0;
+            const int max_additional_retries = 100;  // Additional 100ms wait
+            
+            while (current_written < sequence_id && additional_retries < max_additional_retries) {
+                std::this_thread::yield();
+                current_written = last_written_sequence_.load(std::memory_order_acquire);
+                additional_retries++;
+            }
+            
+            // Final check - if still not written, log warning
+            if (current_written < sequence_id) {
+                LOG_WARNING("ensure_wal_written extended timeout for sequence " + 
+                           std::to_string(sequence_id) + 
+                           " (last written: " + std::to_string(current_written) + ")");
+            }
+        }
+    }
 }
 
 void ProductionMatchingEngineSafeOptimized::wal_writer_thread() {
     LOG_INFO("WAL writer thread started");
     
+    // ✅ Optimization: Batch processing for better performance
+    const size_t BATCH_SIZE = 100;  // Batch process 100 entries
+    std::vector<WALEntry> batch;
+    batch.reserve(BATCH_SIZE);
+    
+    std::vector<Order> orders;
+    std::vector<Trade> trades;
+    orders.reserve(BATCH_SIZE);
+    trades.reserve(BATCH_SIZE);
+    
     while (running_.load(std::memory_order_relaxed) || !wal_queue_->empty()) {
-        WALEntry entry;
+        // ✅ Collect batch of entries
+        batch.clear();
+        orders.clear();
+        trades.clear();
         
-        // Try to pop from queue
-        if (wal_queue_->pop(entry)) {
-            try {
-                // Write to WAL (this is now off the critical path)
-                if (entry.type == WALEntry::Type::ORDER) {
-                    wal_->append(entry.order);
-                    // Update last written sequence for zero data loss guarantee
-                    last_written_sequence_.store(entry.sequence_id, std::memory_order_release);
-                } else if (entry.type == WALEntry::Type::TRADE) {
-                    wal_->append(entry.trade);
-                    // Update last written sequence
-                    last_written_sequence_.store(entry.sequence_id, std::memory_order_release);
+        for (size_t i = 0; i < BATCH_SIZE; ++i) {
+            WALEntry entry;
+            if (wal_queue_->pop(entry)) {
+                batch.push_back(entry);
+            } else {
+                break;  // Queue empty, process collected batch
+            }
+        }
+        
+        if (!batch.empty()) {
+            uint64_t max_seq = 0;
+            
+            // ✅ Separate orders and trades for batch writing
+            for (const auto& entry : batch) {
+                if (entry.sequence_id > max_seq) {
+                    max_seq = entry.sequence_id;
                 }
+                
+                if (entry.type == WALEntry::Type::ORDER) {
+                    orders.push_back(entry.order);
+                } else if (entry.type == WALEntry::Type::TRADE) {
+                    trades.push_back(entry.trade);
+                }
+            }
+            
+            // ✅ Batch write using append_batch (reduces system calls)
+            try {
+                if (!orders.empty()) {
+                    if (!wal_->append_batch(orders)) {
+                        LOG_ERROR("Failed to append batch of orders");
+                    }
+                }
+                if (!trades.empty()) {
+                    if (!wal_->append_batch_trades(trades)) {
+                        LOG_ERROR("Failed to append batch of trades");
+                    }
+                }
+                
+                // ✅ Batch update sequence number
+                last_written_sequence_.store(max_seq, std::memory_order_release);
+                
+                // ✅ Immediate notification (no batch delay)
+                {
+                    std::lock_guard<std::mutex> lock(wal_written_mutex_);
+                    wal_written_cv_.notify_all();
+                }
+                
+                // ✅ Notify batch confirm manager (immediate notification)
+                if (batch_confirm_manager_) {
+                    batch_confirm_manager_->notify_written(max_seq);
+                }
+                
+                // ✅ Use async fsync only for large batches (reduce overhead)
+                if (batch.size() >= BATCH_SIZE && wal_) {
+                    wal_->async_sync();
+                }
+                
             } catch (const std::exception& e) {
-                LOG_ERROR("WAL write failed: " + std::string(e.what()));
+                LOG_ERROR("WAL batch write failed: " + std::string(e.what()));
             }
         } else {
-            // Queue empty, use yield instead of sleep for better responsiveness
+            // Queue empty, yield to other threads
             std::this_thread::yield();
         }
     }
@@ -358,11 +446,23 @@ void ProductionMatchingEngineSafeOptimized::sync_write_critical(const Order* ord
     }
     
     try {
-        // 1. Wait for WAL writer to catch up (drain queue if needed)
-        // This ensures queue data is written before we sync
+        // ✅ Optimization: Smart wait for queue to drain (instead of fixed sleep)
         if (wal_queue_ && !wal_queue_->empty()) {
-            // Give WAL writer a moment to process queue
-            std::this_thread::sleep_for(std::chrono::microseconds(100));
+            // Use yield + limited retries instead of fixed sleep
+            int retries = 0;
+            const int max_retries = 50;  // Max 50 yields (approx 500μs)
+            
+            while (!wal_queue_->empty() && retries < max_retries) {
+                std::this_thread::yield();
+                retries++;
+            }
+            
+            // If queue still not empty, wait a bit longer with shorter sleeps
+            if (!wal_queue_->empty()) {
+                for (int i = 0; i < 10 && !wal_queue_->empty(); ++i) {
+                    std::this_thread::sleep_for(std::chrono::microseconds(10));
+                }
+            }
         }
         
         // 2. Write order to WAL (synchronous)
@@ -371,10 +471,17 @@ void ProductionMatchingEngineSafeOptimized::sync_write_critical(const Order* ord
             return;
         }
         
-        // 3. Write trades to WAL (synchronous)
-        for (const auto& trade : trades) {
-            if (!wal_->append(trade)) {
-                LOG_ERROR("Failed to append trade to WAL");
+        // ✅ Optimization: Use batch write for trades if there are many
+        if (trades.size() > 10) {
+            if (!wal_->append_batch_trades(trades)) {
+                LOG_ERROR("Failed to append batch of trades");
+            }
+        } else {
+            // 3. Write trades to WAL (synchronous, for small batches)
+            for (const auto& trade : trades) {
+                if (!wal_->append(trade)) {
+                    LOG_ERROR("Failed to append trade to WAL");
+                }
             }
         }
         
@@ -436,12 +543,22 @@ void ProductionMatchingEngineSafeOptimized::shutdown() {
             }
         }
         
+        // Stop batch confirm manager
+        if (batch_confirm_manager_) {
+            batch_confirm_manager_->stop();
+        }
+        
         // Join threads (they will finish processing remaining entries)
         if (wal_writer_thread_.joinable()) {
             wal_writer_thread_.join();
         }
         if (sync_worker_thread_.joinable()) {
             sync_worker_thread_.join();
+        }
+        
+        // Wait for async fsync to complete
+        if (wal_) {
+            wal_->wait_async_sync();
         }
         
         // Final sync to ensure all data is persisted

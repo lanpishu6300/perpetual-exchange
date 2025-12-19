@@ -7,6 +7,10 @@
 #include <fstream>
 #include <atomic>
 #include <mutex>
+#include <thread>
+#include <condition_variable>
+#include <queue>
+#include <memory>
 
 namespace perpetual {
 
@@ -23,6 +27,10 @@ public:
     bool append(const Order& order);
     bool append(const Trade& trade);
     
+    // Batch append for better performance (optimization)
+    bool append_batch(const std::vector<Order>& orders);
+    bool append_batch_trades(const std::vector<Trade>& trades);
+    
     // Mark records as committed (can be truncated)
     void mark_committed(Timestamp timestamp);
     
@@ -35,6 +43,15 @@ public:
     
     // Sync to disk
     void sync();
+    
+    // Async fsync (non-blocking)
+    void async_sync();
+    
+    // Wait for async fsync to complete
+    void wait_async_sync();
+    
+    // Enable mmap mode (for better performance)
+    bool enable_mmap(size_t initial_size = 64 * 1024 * 1024);  // 64MB default
     
     // Get WAL statistics
     uint64_t size() const { return current_offset_.load(); }
@@ -73,6 +90,23 @@ private:
     std::atomic<uint64_t> current_offset_{0};
     std::mutex write_mutex_;
     Timestamp last_committed_ts_{0};
+    
+    // MMAP support
+    bool use_mmap_{false};
+    void* mmap_addr_{nullptr};
+    size_t mmap_size_{0};
+    size_t mmap_capacity_{0};
+    
+    // Async fsync support
+    std::thread async_sync_thread_;
+    std::atomic<bool> async_sync_running_{false};
+    std::queue<uint64_t> async_sync_queue_;
+    std::mutex async_sync_mutex_;
+    std::condition_variable async_sync_cv_;
+    std::atomic<uint64_t> last_synced_offset_{0};
+    
+    void async_sync_worker();
+    void remap_if_needed(size_t required_size);
 };
 
 } // namespace perpetual

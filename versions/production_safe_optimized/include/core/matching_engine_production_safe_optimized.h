@@ -8,6 +8,7 @@
 #include <vector>
 #include <mutex>
 #include <memory>
+#include <condition_variable>
 
 namespace perpetual {
 
@@ -102,6 +103,7 @@ private:
     
     // Zero data loss configuration
     bool zero_loss_mode_ = false;  // If true, all orders are critical
+    bool wait_for_wal_write_ = false;  // If true, wait for WAL write completion (slower but safer)
     Price critical_order_threshold_ = 0;  // Orders above this price are critical
     Quantity critical_quantity_threshold_ = 0;  // Orders above this quantity are critical
     
@@ -125,6 +127,72 @@ private:
     std::atomic<uint64_t> pending_sequence_{0};
     std::atomic<uint64_t> committed_sequence_{0};
     std::atomic<uint64_t> last_written_sequence_{0};  // Last sequence written to WAL file
+    
+    // Condition variable for efficient WAL write notification (optimization)
+    std::condition_variable wal_written_cv_;
+    std::mutex wal_written_mutex_;  // Only for condition variable
+    
+    // Batch confirm manager for optimized waiting (async batch confirmation)
+    class BatchConfirmManager {
+    public:
+        BatchConfirmManager() : running_(false), last_confirmed_seq_(0) {}
+        
+        void start() {
+            running_ = true;
+            confirm_thread_ = std::thread(&BatchConfirmManager::confirm_thread, this);
+        }
+        
+        void stop() {
+            running_ = false;
+            if (confirm_thread_.joinable()) {
+                confirm_thread_.join();
+            }
+        }
+        
+        // Notify that a sequence has been written (called by WAL writer, immediate notification)
+        void notify_written(uint64_t seq_id) {
+            std::lock_guard<std::mutex> lock(confirm_mutex_);
+            if (seq_id > last_confirmed_seq_.load(std::memory_order_relaxed)) {
+                last_confirmed_seq_.store(seq_id, std::memory_order_release);
+                confirm_cv_.notify_all();  // Immediate notification
+            }
+        }
+        
+        // Wait for confirmation (fast check, no batch delay)
+        void wait_for_confirm(uint64_t seq_id, std::chrono::milliseconds timeout) {
+            // Fast path: immediate check
+            if (last_confirmed_seq_.load(std::memory_order_acquire) >= seq_id) {
+                return;  // Already confirmed, return immediately
+            }
+            
+            // Slow path: wait for notification
+            std::unique_lock<std::mutex> lock(confirm_mutex_);
+            auto deadline = std::chrono::steady_clock::now() + timeout;
+            
+            confirm_cv_.wait_until(lock, deadline, [this, seq_id]() {
+                return last_confirmed_seq_.load(std::memory_order_acquire) >= seq_id;
+            });
+        }
+        
+    private:
+        void confirm_thread() {
+            // This thread is mainly for statistics, actual notification is immediate
+            const auto STATS_INTERVAL = std::chrono::milliseconds(100);
+            
+            while (running_) {
+                std::this_thread::sleep_for(STATS_INTERVAL);
+                // Statistics collection can be added here if needed
+            }
+        }
+        
+        std::atomic<bool> running_;
+        std::atomic<uint64_t> last_confirmed_seq_;
+        std::condition_variable confirm_cv_;
+        std::mutex confirm_mutex_;
+        std::thread confirm_thread_;
+    };
+    
+    std::unique_ptr<BatchConfirmManager> batch_confirm_manager_;
     
     // Worker threads
     std::thread wal_writer_thread_;

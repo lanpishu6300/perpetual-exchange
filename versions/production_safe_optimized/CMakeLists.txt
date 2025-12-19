@@ -20,7 +20,7 @@ set(SAFE_OPTIMIZED_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/matching_engine_production_safe_optimized.cpp
     ${PROJECT_ROOT}/versions/production_safe/src/core/matching_engine_production_v2.cpp
     ${PROJECT_ROOT}/versions/production_safe/src/core/matching_engine_production.cpp
-    ${PROJECT_ROOT}/versions/production_safe/src/core/wal_simple.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/wal_simple.cpp
     ${PROJECT_ROOT}/versions/production_safe/src/core/matching_engine_art_simd.cpp
     ${PROJECT_ROOT}/versions/production_safe/src/core/matching_engine_art.cpp
     ${PROJECT_ROOT}/versions/production_safe/src/core/matching_engine.cpp
@@ -92,6 +92,16 @@ add_executable(production_safe_optimized_benchmark_zero_loss
 )
 
 target_link_libraries(production_safe_optimized_benchmark_zero_loss
+    perpetual_production_safe_optimized
+    pthread
+)
+
+# Realtime benchmark executable
+add_executable(production_safe_optimized_realtime_benchmark
+    ${CMAKE_CURRENT_SOURCE_DIR}/realtime_benchmark.cpp
+)
+
+target_link_libraries(production_safe_optimized_realtime_benchmark
     perpetual_production_safe_optimized
     pthread
 )
