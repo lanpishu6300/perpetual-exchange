@@ -14,7 +14,7 @@ using namespace std::chrono;
 
 int main(int argc, char* argv[]) {
     constexpr size_t NUM_ORDERS = 50000;
-    constexpr InstrumentID INSTRUMENT_ID = 1;
+    constexpr perpetual::InstrumentID INSTRUMENT_ID = 1;
     bool zero_loss_mode = (argc > 1 && std::string(argv[1]) == "zero_loss");
     
     std::cout << "=== Production Safe Optimized Benchmark (Zero Loss Mode) ===\n\n";
