@@ -243,7 +243,7 @@ Running Test 2: Medium Scale (10K orders)...
 - **分支**: `stable/v1.0-benchmark-working`
 - **提交**: `e99ad60`
 - **提交信息**: "完成benchmark基础功能验证"
-- **GitHub**: https://github.com/lanpishu6300/perpetual-exchange
+- **GitHub**: https://github.com/[username]/perpetual-exchange
 
 ---
 
@@ -512,7 +512,7 @@ Running Test 2: Medium Scale (10K orders)...
 - **分支**: `stable/v1.0-benchmark-working`
 - **提交**: `e99ad60`
 - **提交信息**: "完成benchmark基础功能验证"
-- **GitHub**: https://github.com/lanpishu6300/perpetual-exchange
+- **GitHub**: https://github.com/[username]/perpetual-exchange
 
 ---
 

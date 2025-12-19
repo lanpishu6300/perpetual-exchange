@@ -125,7 +125,7 @@ make
 
 ## 🔗 相关链接
 
-- GitHub: https://github.com/lanpishu6300/perpetual-exchange
+- GitHub: https://github.com/[username]/perpetual-exchange
 - 分支: `stable/v1.0-versioned-code`
 - 构建脚本: `./build_versions.sh`
 
@@ -268,7 +268,7 @@ make
 
 ## 🔗 相关链接
 
-- GitHub: https://github.com/lanpishu6300/perpetual-exchange
+- GitHub: https://github.com/[username]/perpetual-exchange
 - 分支: `stable/v1.0-versioned-code`
 - 构建脚本: `./build_versions.sh`
 

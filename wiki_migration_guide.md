@@ -8,7 +8,7 @@
 
 GitHub Wiki 实际上是一个独立的 Git 仓库：
 - Wiki 仓库 URL: `https://github.com/用户名/仓库名.wiki.git`
-- 本项目的 Wiki URL: `https://github.com/lanpishu6300/perpetual-exchange.wiki.git`
+- 本项目的 Wiki URL: `https://github.com/[username]/perpetual-exchange.wiki.git`
 
 ## 快速开始
 
@@ -30,7 +30,7 @@ GitHub Wiki 实际上是一个独立的 Git 仓库：
 #### 步骤1: 克隆 Wiki 仓库
 
 ```bash
-git clone https://github.com/lanpishu6300/perpetual-exchange.wiki.git
+git clone https://github.com/[username]/perpetual-exchange.wiki.git
 cd perpetual-exchange.wiki
 ```
 
@@ -107,4 +107,4 @@ git push
 ## 相关链接
 
 - [GitHub Wiki 文档](https://docs.github.com/en/communities/documenting-your-project-with-wikis)
-- [项目 Wiki](https://github.com/lanpishu6300/perpetual-exchange/wiki)
+- [项目 Wiki](https://github.com/[username]/perpetual-exchange/wiki)

@@ -18,7 +18,7 @@ ProductionMatchingEngineSafeOptimized::~ProductionMatchingEngineSafeOptimized() 
     shutdown();
 }
 
-bool ProductionMatchingEngineSafeOptimized::initialize(const std::string& config_file, bool enable_wal) {
+bool ProductionMatchingEngineSafeOptimized::initialize(const std::string& config_file, bool enable_wal, const std::string& wal_path) {
     // Initialize V2 first
     if (!ProductionMatchingEngineV2::initialize(config_file)) {
         return false;
@@ -27,11 +27,11 @@ bool ProductionMatchingEngineSafeOptimized::initialize(const std::string& config
     wal_enabled_ = enable_wal;
     
     if (wal_enabled_) {
-        // Initialize WAL
-        std::string wal_path = "./data/wal";
+        // Initialize WAL (use provided path or default)
+        std::string actual_wal_path = wal_path.empty() ? "./data/wal" : wal_path;
         try {
-            wal_ = std::make_unique<WriteAheadLog>(wal_path);
-            LOG_INFO("WAL initialized: " + wal_path);
+            wal_ = std::make_unique<WriteAheadLog>(actual_wal_path);
+            LOG_INFO("WAL initialized: " + actual_wal_path);
         } catch (const std::exception& e) {
             LOG_ERROR("Failed to initialize WAL: " + std::string(e.what()));
             return false;
@@ -40,7 +40,7 @@ bool ProductionMatchingEngineSafeOptimized::initialize(const std::string& config
         // Initialize lock-free queue
         wal_queue_ = std::make_unique<LockFreeSPSCQueue<WALEntry>>(WAL_QUEUE_SIZE);
         
-        // Initialize batch confirm manager
+        // Initialize batch confirm manager (only when WAL is enabled)
         batch_confirm_manager_ = std::make_unique<BatchConfirmManager>();
         batch_confirm_manager_->start();
         
@@ -56,6 +56,8 @@ bool ProductionMatchingEngineSafeOptimized::initialize(const std::string& config
         
         LOG_INFO("Production Safe Optimized engine initialized with async WAL and batch confirmation");
     } else {
+        // WAL disabled: batch_confirm_manager_ remains nullptr (initialized as nullptr)
+        // This ensures no blocking when WAL is disabled
         LOG_WARNING("WAL is disabled");
     }
     
@@ -117,13 +119,15 @@ std::vector<Trade> ProductionMatchingEngineSafeOptimized::process_order_optimize
                 
                 // Zero data loss guarantee: ensure entry is written to WAL file
                 // ✅ Use batch confirmation for better performance (immediate notification, no batch delay)
-                if (batch_confirm_manager_) {
+                // Only wait if WAL is enabled and batch_confirm_manager_ is initialized
+                if (wal_enabled_ && batch_confirm_manager_) {
                     // Wait for confirmation (max 50ms, reduced from 110ms)
                     batch_confirm_manager_->wait_for_confirm(seq_id, std::chrono::milliseconds(50));
-                } else {
-                    // Fallback to original method
+                } else if (wal_enabled_) {
+                    // Fallback to original method (only if WAL enabled)
                     ensure_wal_written(seq_id);
                 }
+                // If WAL disabled, skip waiting (for benchmark performance)
             } else {
                 // Queue full - fallback to sync write for safety (rare case)
                 // This ensures zero data loss even when queue is full

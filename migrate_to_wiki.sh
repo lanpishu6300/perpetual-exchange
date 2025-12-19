@@ -3,7 +3,7 @@
 # GitHub Wiki 迁移脚本
 # 将设计文档迁移到 GitHub Wiki
 
-REPO_URL="https://github.com/lanpishu6300/perpetual-exchange.git"
+REPO_URL="https://github.com/[username]/perpetual-exchange.git"
 WIKI_URL="${REPO_URL%.git}.wiki.git"
 WIKI_DIR="/tmp/perpetual-exchange-wiki"
 PROJECT_ROOT="/Users/lan/Downloads/perpetual_exchange"
