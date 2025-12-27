@@ -84,11 +84,39 @@ void run_realtime_benchmark(size_t num_orders = 50000, size_t report_interval = 
     std::vector<double> latencies;
     latencies.reserve(num_orders);
     
+    // 跟踪每个撮合分片的订单数
+    size_t num_matching_shards = engine.get_matching_shard_count();
+    std::vector<size_t> matching_shard_order_counts(num_matching_shards, 0);
+    std::vector<high_resolution_clock::time_point> matching_shard_start_times(num_matching_shards);
+    std::vector<bool> matching_shard_started(num_matching_shards, false);
+    
+    // 跟踪每个交易分片的订单数
+    size_t num_trading_shards = engine.get_trading_shard_count();
+    std::vector<size_t> trading_shard_order_counts(num_trading_shards, 0);
+    std::vector<high_resolution_clock::time_point> trading_shard_start_times(num_trading_shards);
+    std::vector<bool> trading_shard_started(num_trading_shards, false);
+    
     auto start_time = high_resolution_clock::now();
     size_t processed = 0;
     
     for (size_t i = warmup; i < orders.size(); ++i) {
         auto order_start = high_resolution_clock::now();
+        
+        // 获取订单将路由到的分片ID
+        size_t trading_shard_id = engine.get_trading_shard_id(orders[i].user_id);
+        size_t matching_shard_id = engine.get_matching_shard_id(orders[i].instrument_id);
+        
+        // 记录交易分片开始时间（第一次处理该分片的订单时）
+        if (!trading_shard_started[trading_shard_id]) {
+            trading_shard_start_times[trading_shard_id] = order_start;
+            trading_shard_started[trading_shard_id] = true;
+        }
+        
+        // 记录撮合分片开始时间（第一次处理该分片的订单时）
+        if (!matching_shard_started[matching_shard_id]) {
+            matching_shard_start_times[matching_shard_id] = order_start;
+            matching_shard_started[matching_shard_id] = true;
+        }
         
         auto trades = engine.process_order(&orders[i]);
         
@@ -96,29 +124,46 @@ void run_realtime_benchmark(size_t num_orders = 50000, size_t report_interval = 
         auto latency = duration_cast<nanoseconds>(order_end - order_start).count() / 1000.0;  // μs
         latencies.push_back(latency);
         
+        // 增加该交易分片的订单计数
+        trading_shard_order_counts[trading_shard_id]++;
+        // 增加该撮合分片的订单计数
+        matching_shard_order_counts[matching_shard_id]++;
+        
         processed++;
         
-        // 实时报告
-        if (processed % report_interval == 0) {
+        // 实时报告 - 增加更频繁的输出
+        if (processed % report_interval == 0 || (processed <= 100 && processed % 10 == 0) || processed == 1) {
             auto current_time = high_resolution_clock::now();
             auto elapsed = duration_cast<milliseconds>(current_time - start_time).count();
             
             // 计算统计
             size_t count = latencies.size();
+            if (count == 0) continue;
+            
             double sum = 0;
+            double min_lat = latencies[0];
+            double max_lat = latencies[0];
             for (size_t j = 0; j < count; ++j) {
                 sum += latencies[j];
+                if (latencies[j] < min_lat) min_lat = latencies[j];
+                if (latencies[j] > max_lat) max_lat = latencies[j];
             }
             double avg = sum / count;
             
-            std::vector<double> sorted = latencies;
-            std::sort(sorted.begin(), sorted.end());
+            // Create a copy for sorting to avoid modifying original
+            std::vector<double> sorted_latencies;
+            sorted_latencies.reserve(count);
+            for (size_t j = 0; j < count; ++j) {
+                sorted_latencies.push_back(latencies[j]);
+            }
+            std::sort(sorted_latencies.begin(), sorted_latencies.end());
             
-            double p50 = sorted[count * 0.5];
-            double p90 = sorted[count * 0.9];
-            double p99 = sorted[count * 0.99];
+            double p50 = sorted_latencies[std::min(static_cast<size_t>(count * 0.5), count - 1)];
+            double p90 = sorted_latencies[std::min(static_cast<size_t>(count * 0.9), count - 1)];
+            double p99 = sorted_latencies[std::min(static_cast<size_t>(count * 0.99), count - 1)];
+            double p99_9 = sorted_latencies[std::min(static_cast<size_t>(count * 0.999), count - 1)];
             
-            double throughput = (processed * 1000.0) / elapsed;  // K orders/sec
+            double throughput = (processed * 1000.0) / (elapsed > 0 ? elapsed : 1);  // K orders/sec
             
             // 获取统计
             auto stats = engine.get_stats();
@@ -129,7 +174,7 @@ void run_realtime_benchmark(size_t num_orders = 50000, size_t report_interval = 
             size_t pos = static_cast<size_t>(bar_width * progress / 100.0);
             
             // 使用换行输出，便于实时查看
-            std::cout << "进度: [";
+            std::cout << std::endl << "进度: [";
             for (size_t j = 0; j < bar_width; ++j) {
                 if (j < pos) std::cout << "=";
                 else if (j == pos) std::cout << ">";
@@ -137,16 +182,41 @@ void run_realtime_benchmark(size_t num_orders = 50000, size_t report_interval = 
             }
             std::cout << "] " << std::fixed << std::setprecision(1) << progress << "%";
             std::cout << " | 已处理: " << processed << "/" << num_orders;
+            std::cout << " | 耗时: " << elapsed << " ms";
             std::cout << " | 吞吐量: " << std::setprecision(2) << throughput << " K/s";
-            std::cout << " | 延迟: " << std::setprecision(2) << avg << " μs";
-            std::cout << " | P50: " << std::setprecision(2) << p50 << " μs";
-            std::cout << " | P90: " << std::setprecision(2) << p90 << " μs";
-            std::cout << " | P99: " << std::setprecision(2) << p99 << " μs";
+            std::cout << " | 延迟(avg/min/max): " << std::setprecision(2) << avg << "/" << min_lat << "/" << max_lat << " μs";
+            std::cout << " | P50/P90/P99/P99.9: " << std::setprecision(2) << p50 << "/" << p90 << "/" << p99 << "/" << p99_9 << " μs";
             std::cout << " | 交易分片: " << engine.get_trading_shard_count() 
                       << " | 撮合分片: " << engine.get_matching_shard_count();
-            std::cout << " | 异步: " << stats.async_writes;
-            std::cout << " | 同步: " << stats.sync_writes;
+            if (stats.async_writes > 0 || stats.sync_writes > 0) {
+                std::cout << " | 异步: " << stats.async_writes;
+                std::cout << " | 同步: " << stats.sync_writes;
+            }
             std::cout << std::endl;
+            
+            // 输出每个交易分片的TPS
+            std::cout << "交易分片TPS: ";
+            for (size_t shard_id = 0; shard_id < num_trading_shards; ++shard_id) {
+                if (trading_shard_started[shard_id]) {
+                    auto shard_elapsed = duration_cast<milliseconds>(current_time - trading_shard_start_times[shard_id]).count();
+                    double shard_tps = (trading_shard_order_counts[shard_id] * 1000.0) / (shard_elapsed > 0 ? shard_elapsed : 1);
+                    std::cout << "T" << shard_id << ": " << std::setprecision(2) << shard_tps << " K/s";
+                    if (shard_id < num_trading_shards - 1) std::cout << " | ";
+                }
+            }
+            std::cout << std::endl;
+            
+            // 输出每个撮合分片的TPS
+            std::cout << "撮合分片TPS: ";
+            for (size_t shard_id = 0; shard_id < num_matching_shards; ++shard_id) {
+                if (matching_shard_started[shard_id]) {
+                    auto shard_elapsed = duration_cast<milliseconds>(current_time - matching_shard_start_times[shard_id]).count();
+                    double shard_tps = (matching_shard_order_counts[shard_id] * 1000.0) / (shard_elapsed > 0 ? shard_elapsed : 1);
+                    std::cout << "M" << shard_id << ": " << std::setprecision(2) << shard_tps << " K/s";
+                    if (shard_id < num_matching_shards - 1) std::cout << " | ";
+                }
+            }
+            std::cout << "                    ";  // 清除之前的输出
             std::cout.flush();
         }
     }
@@ -172,14 +242,17 @@ void run_realtime_benchmark(size_t num_orders = 50000, size_t report_interval = 
     }
     
     double avg = sum / count;
-    double throughput = (processed * 1000.0) / total_time;  // K orders/sec
+    double throughput = (processed * 1000.0) / (total_time > 0 ? total_time : 1);  // K orders/sec
     
-    std::vector<double> sorted = latencies;
-    std::sort(sorted.begin(), sorted.end());
+    // Create a copy for sorting
+    std::vector<double> sorted_latencies;
+    sorted_latencies.reserve(count);
+    sorted_latencies.assign(latencies.begin(), latencies.end());
+    std::sort(sorted_latencies.begin(), sorted_latencies.end());
     
-    double p50 = sorted[count * 0.5];
-    double p90 = sorted[count * 0.9];
-    double p99 = sorted[count * 0.99];
+    double p50 = sorted_latencies[std::min(static_cast<size_t>(count * 0.5), count - 1)];
+    double p90 = sorted_latencies[std::min(static_cast<size_t>(count * 0.9), count - 1)];
+    double p99 = sorted_latencies[std::min(static_cast<size_t>(count * 0.99), count - 1)];
     
     auto stats = engine.get_stats();
     
@@ -203,6 +276,43 @@ void run_realtime_benchmark(size_t num_orders = 50000, size_t report_interval = 
     std::cout << "  同步写入: " << stats.sync_writes << std::endl;
     std::cout << "  队列大小: " << stats.queue_size << std::endl;
     std::cout << "  WAL大小: " << stats.wal_size << " bytes" << std::endl;
+    std::cout << std::endl;
+    
+    // 输出每个交易分片的详细TPS统计
+    std::cout << "=== 交易分片TPS统计 (Trading Shards) ===" << std::endl;
+    for (size_t shard_id = 0; shard_id < num_trading_shards; ++shard_id) {
+        if (trading_shard_started[shard_id]) {
+            auto shard_elapsed = duration_cast<milliseconds>(end_time - trading_shard_start_times[shard_id]).count();
+            double shard_tps = (trading_shard_order_counts[shard_id] * 1000.0) / (shard_elapsed > 0 ? shard_elapsed : 1);
+            double shard_percentage = (trading_shard_order_counts[shard_id] * 100.0) / processed;
+            std::cout << "交易分片 " << shard_id << ":" << std::endl;
+            std::cout << "  订单数: " << trading_shard_order_counts[shard_id] << " (" 
+                      << std::setprecision(1) << shard_percentage << "%)" << std::endl;
+            std::cout << "  TPS: " << std::setprecision(2) << shard_tps << " K orders/sec" << std::endl;
+            std::cout << "  耗时: " << shard_elapsed << " ms" << std::endl;
+        } else {
+            std::cout << "交易分片 " << shard_id << ": 未使用" << std::endl;
+        }
+    }
+    std::cout << std::endl;
+    
+    // 输出每个撮合分片的详细TPS统计
+    std::cout << "=== 撮合分片TPS统计 (Matching Shards) ===" << std::endl;
+    for (size_t shard_id = 0; shard_id < num_matching_shards; ++shard_id) {
+        if (matching_shard_started[shard_id]) {
+            auto shard_elapsed = duration_cast<milliseconds>(end_time - matching_shard_start_times[shard_id]).count();
+            double shard_tps = (matching_shard_order_counts[shard_id] * 1000.0) / (shard_elapsed > 0 ? shard_elapsed : 1);
+            double shard_percentage = (matching_shard_order_counts[shard_id] * 100.0) / processed;
+            std::cout << "撮合分片 " << shard_id << ":" << std::endl;
+            std::cout << "  订单数: " << matching_shard_order_counts[shard_id] << " (" 
+                      << std::setprecision(1) << shard_percentage << "%)" << std::endl;
+            std::cout << "  TPS: " << std::setprecision(2) << shard_tps << " K orders/sec" << std::endl;
+            std::cout << "  耗时: " << shard_elapsed << " ms" << std::endl;
+        } else {
+            std::cout << "撮合分片 " << shard_id << ": 未使用" << std::endl;
+        }
+    }
+    std::cout << std::endl;
     
     engine.shutdown();
 }
@@ -222,4 +332,3 @@ int main(int argc, char* argv[]) {
     
     return 0;
 }
-

@@ -139,6 +139,36 @@ target_link_libraries(production_safe_optimized_quick_stress_test
     pthread
 )
 
+# Trading shard benchmark (独立测试交易分片)
+add_executable(production_safe_optimized_benchmark_trading_shard
+    ${CMAKE_CURRENT_SOURCE_DIR}/benchmark_trading_shard.cpp
+)
+
+target_link_libraries(production_safe_optimized_benchmark_trading_shard
+    perpetual_production_safe_optimized
+    pthread
+)
+
+# Matching shard benchmark (独立测试撮合分片)
+add_executable(production_safe_optimized_benchmark_matching_shard
+    ${CMAKE_CURRENT_SOURCE_DIR}/benchmark_matching_shard.cpp
+)
+
+target_link_libraries(production_safe_optimized_benchmark_matching_shard
+    perpetual_production_safe_optimized
+    pthread
+)
+
+# Full shard benchmark executable (Trading + Matching)
+add_executable(production_safe_optimized_full_shard_benchmark
+    ${CMAKE_CURRENT_SOURCE_DIR}/full_shard_benchmark.cpp
+)
+
+target_link_libraries(production_safe_optimized_full_shard_benchmark
+    perpetual_production_safe_optimized
+    pthread
+)
+
 # Force remove -march=native for Apple platforms
 if(APPLE)
     # Apple platforms - never use -march=native
@@ -163,4 +193,3 @@ else()
         -funroll-loops
     )
 endif()
-

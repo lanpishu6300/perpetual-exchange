@@ -69,8 +69,14 @@ private:
     const AccountData& getAccount(UserID user_id) const;
     
     // Account storage
+    // 无锁优化：使用concurrent_unordered_map或分片锁
+    // 当前使用std::unordered_map + 优化后的锁策略
     std::unordered_map<UserID, AccountData> accounts_;
     mutable std::mutex accounts_mutex_;
+    
+    // 可选：分片锁数组（用于进一步优化）
+    // static constexpr size_t NUM_LOCK_SHARDS = 256;
+    // mutable std::array<std::mutex, NUM_LOCK_SHARDS> lock_shards_;
 };
 
 } // namespace perpetual

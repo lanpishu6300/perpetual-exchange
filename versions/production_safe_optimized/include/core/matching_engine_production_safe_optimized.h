@@ -29,7 +29,7 @@ public:
     ~ProductionMatchingEngineSafeOptimized();
     
     // Initialize with optimized WAL
-    bool initialize(const std::string& config_file, bool enable_wal = true, const std::string& wal_path = "");
+    bool initialize(const std::string& config_file, bool enable_wal = true, const std::string& wal_path = "", int cpu_core = -1);
     
     // Process order with optimized async WAL
     std::vector<Trade> process_order_optimized(Order* order);

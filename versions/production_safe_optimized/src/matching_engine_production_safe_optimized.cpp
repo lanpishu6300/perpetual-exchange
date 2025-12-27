@@ -5,6 +5,13 @@
 #include <algorithm>
 #include <thread>
 #include <condition_variable>
+#ifdef __APPLE__
+#include <mach/thread_policy.h>
+#include <mach/thread_act.h>
+#include <pthread.h>
+#elif defined(__linux__)
+#include <pthread.h>
+#endif
 
 using namespace std::chrono;
 
@@ -18,7 +25,37 @@ ProductionMatchingEngineSafeOptimized::~ProductionMatchingEngineSafeOptimized() 
     shutdown();
 }
 
-bool ProductionMatchingEngineSafeOptimized::initialize(const std::string& config_file, bool enable_wal, const std::string& wal_path) {
+// Helper function to set CPU affinity (cross-platform)
+static void set_thread_cpu_affinity(std::thread& thread, int cpu_core) {
+    if (cpu_core < 0) return;  // No binding requested
+    
+#ifdef __APPLE__
+    // macOS: Use thread affinity policy (requires macOS 10.5+)
+    // Note: This is a hint, macOS scheduler may still migrate threads
+    thread_port_t mach_thread = pthread_mach_thread_np(thread.native_handle());
+    if (mach_thread != 0) {
+        thread_affinity_policy_data_t policy = { static_cast<integer_t>(cpu_core) };
+        kern_return_t result = thread_policy_set(mach_thread, 
+                                                 THREAD_AFFINITY_POLICY,
+                                                 (thread_policy_t)&policy,
+                                                 THREAD_AFFINITY_POLICY_COUNT);
+        if (result != KERN_SUCCESS) {
+            // Silently fail on macOS - affinity is a hint anyway
+        }
+    }
+#elif defined(__linux__)
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(cpu_core, &cpuset);
+    pthread_setaffinity_np(thread.native_handle(), sizeof(cpu_set_t), &cpuset);
+#else
+    // Other platforms: no-op
+    (void)thread;
+    (void)cpu_core;
+#endif
+}
+
+bool ProductionMatchingEngineSafeOptimized::initialize(const std::string& config_file, bool enable_wal, const std::string& wal_path, int cpu_core) {
     // Initialize V2 first
     if (!ProductionMatchingEngineV2::initialize(config_file)) {
         return false;
@@ -53,6 +90,13 @@ bool ProductionMatchingEngineSafeOptimized::initialize(const std::string& config
         running_ = true;
         wal_writer_thread_ = std::thread(&ProductionMatchingEngineSafeOptimized::wal_writer_thread, this);
         sync_worker_thread_ = std::thread(&ProductionMatchingEngineSafeOptimized::sync_worker_thread, this);
+        
+        // Bind WAL threads to same CPU core if specified (shares core with processing thread)
+        if (cpu_core >= 0) {
+            set_thread_cpu_affinity(wal_writer_thread_, cpu_core);
+            set_thread_cpu_affinity(sync_worker_thread_, cpu_core);
+            LOG_INFO("WAL threads bound to CPU core " + std::to_string(cpu_core));
+        }
         
         LOG_INFO("Production Safe Optimized engine initialized with async WAL and batch confirmation");
     } else {
@@ -580,4 +624,3 @@ void ProductionMatchingEngineSafeOptimized::shutdown() {
 }
 
 } // namespace perpetual
-
