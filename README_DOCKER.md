@@ -28,7 +28,7 @@ chmod +x docker-build.sh
 ./docker-build.sh
 
 # 运行测试
-docker run --rm --platform linux/amd64 perpetual-exchange:simd
+docker run --rm --platform linux/amd64 matching-engine:simd
 ```
 
 ### 方法3: 手动构建
@@ -37,12 +37,12 @@ docker run --rm --platform linux/amd64 perpetual-exchange:simd
 # 构建x86_64镜像
 docker buildx build \
     --platform linux/amd64 \
-    --tag perpetual-exchange:simd \
+    --tag matching-engine:simd \
     --load \
     -f Dockerfile .
 
 # 运行容器
-docker run --rm --platform linux/amd64 perpetual-exchange:simd
+docker run --rm --platform linux/amd64 matching-engine:simd
 ```
 
 ## 在ARM Mac上运行x86_64容器
@@ -54,8 +54,8 @@ docker run --rm --platform linux/amd64 perpetual-exchange:simd
 docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 
 # 然后正常构建和运行
-docker buildx build --platform linux/amd64 --tag perpetual-exchange:simd --load -f Dockerfile .
-docker run --rm --platform linux/amd64 perpetual-exchange:simd
+docker buildx build --platform linux/amd64 --tag matching-engine:simd --load -f Dockerfile .
+docker run --rm --platform linux/amd64 matching-engine:simd
 ```
 
 ## 测试内容
@@ -83,7 +83,7 @@ SIMD benchmark包含以下测试：
 ```bash
 docker run --rm --platform linux/amd64 \
     -v $(pwd)/results:/app/results \
-    perpetual-exchange:simd > results/simd_benchmark.txt
+    matching-engine:simd > results/simd_benchmark.txt
 ```
 
 ## 故障排除
@@ -122,7 +122,7 @@ docker buildx build --platform linux/amd64 ...
 在容器内运行：
 
 ```bash
-docker run --rm --platform linux/amd64 -it perpetual-exchange:simd /bin/bash
+docker run --rm --platform linux/amd64 -it matching-engine:simd /bin/bash
 # 在容器内
 ./simd_benchmark
 # 查看输出中的 "AVX2 Support: Yes"
@@ -133,7 +133,7 @@ docker run --rm --platform linux/amd64 -it perpetual-exchange:simd /bin/bash
 运行对比测试查看SIMD vs 标量实现的性能差异：
 
 ```bash
-docker run --rm --platform linux/amd64 perpetual-exchange:simd
+docker run --rm --platform linux/amd64 matching-engine:simd
 ```
 
 输出会显示：

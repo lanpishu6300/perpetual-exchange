@@ -8,7 +8,7 @@
 
 1. 登录 GitHub (lanpishu6300@gmail.com)
 2. 点击右上角 "+" → "New repository"
-3. 仓库名称建议: `perpetual-exchange`
+3. 仓库名称建议: `matching-engine`
 4. 描述: "High-Performance Perpetual Futures Exchange Matching Engine"
 5. 选择 Public 或 Private
 6. **不要**勾选 "Initialize with README"（我们已经有了）
@@ -22,10 +22,10 @@
 cd /Users/lan/Downloads/perpetual_exchange
 
 # 添加远程仓库（替换 YOUR_USERNAME 为你的GitHub用户名）
-git remote add origin https://github.com/YOUR_USERNAME/perpetual-exchange.git
+git remote add origin https://github.com/YOUR_USERNAME/matching-engine.git
 
 # 或者使用SSH（如果配置了SSH密钥）
-# git remote add origin git@github.com:YOUR_USERNAME/perpetual-exchange.git
+# git remote add origin git@github.com:YOUR_USERNAME/matching-engine.git
 
 # 推送代码
 git branch -M main

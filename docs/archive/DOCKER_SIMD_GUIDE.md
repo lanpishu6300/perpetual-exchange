@@ -32,7 +32,7 @@ docker-compose build
 # 方法3: 手动构建
 docker buildx build \
     --platform linux/amd64 \
-    --tag perpetual-exchange:simd \
+    --tag matching-engine:simd \
     --load \
     -f Dockerfile .
 ```
@@ -44,10 +44,10 @@ docker buildx build \
 docker-compose up
 
 # 方法2: 直接运行容器
-docker run --rm --platform linux/amd64 perpetual-exchange:simd
+docker run --rm --platform linux/amd64 matching-engine:simd
 
 # 方法3: 交互式运行
-docker run --rm --platform linux/amd64 -it perpetual-exchange:simd /bin/bash
+docker run --rm --platform linux/amd64 -it matching-engine:simd /bin/bash
 # 然后在容器内运行: ./simd_benchmark
 ```
 
@@ -116,12 +116,12 @@ docker buildx create --name multiarch --use
 # 3. 构建x86_64镜像
 docker buildx build \
     --platform linux/amd64 \
-    --tag perpetual-exchange:simd \
+    --tag matching-engine:simd \
     --load \
     -f Dockerfile .
 
 # 4. 运行测试
-docker run --rm --platform linux/amd64 perpetual-exchange:simd
+docker run --rm --platform linux/amd64 matching-engine:simd
 ```
 
 **注意**: 通过QEMU运行会有性能损失，建议在原生x86_64系统上测试以获得准确结果。
@@ -160,7 +160,7 @@ AVX2 Support: Yes
 
 在容器内运行：
 ```bash
-docker run --rm --platform linux/amd64 -it perpetual-exchange:simd /bin/bash
+docker run --rm --platform linux/amd64 -it matching-engine:simd /bin/bash
 grep avx2 /proc/cpuinfo
 ```
 
@@ -222,7 +222,7 @@ docker-compose build
 docker run --rm --platform linux/amd64 \
     --privileged \
     -v /sys/kernel/debug:/sys/kernel/debug \
-    -it perpetual-exchange:simd /bin/bash
+    -it matching-engine:simd /bin/bash
 
 # 安装perf
 apt-get update && apt-get install -y linux-perf
@@ -239,7 +239,7 @@ perf report
 docker buildx build \
     --platform linux/amd64 \
     --build-arg CMAKE_CXX_FLAGS="-march=native -mavx2 -mfma -O3 -S" \
-    --tag perpetual-exchange:simd \
+    --tag matching-engine:simd \
     --load \
     -f Dockerfile .
 ```
@@ -266,7 +266,7 @@ docker buildx build \
 ```bash
 docker run --rm --platform linux/amd64 \
     -v $(pwd)/results:/app/results \
-    perpetual-exchange:simd > results/simd_report_$(date +%Y%m%d_%H%M%S).txt
+    matching-engine:simd > results/simd_report_$(date +%Y%m%d_%H%M%S).txt
 ```
 
 ## 🔗 相关文档

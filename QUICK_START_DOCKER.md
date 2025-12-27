@@ -11,7 +11,7 @@ docker-compose up --build
 # 或者使用脚本
 chmod +x docker-build.sh
 ./docker-build.sh
-docker run --rm --platform linux/amd64 perpetual-exchange:simd
+docker run --rm --platform linux/amd64 matching-engine:simd
 ```
 
 ## 📊 查看结果

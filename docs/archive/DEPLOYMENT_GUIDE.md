@@ -181,7 +181,7 @@ deploy:
 ```yaml
 # prometheus.yml
 scrape_configs:
-  - job_name: 'perpetual-exchange'
+  - job_name: 'matching-engine'
     static_configs:
       - targets: ['localhost:9090']
 ```

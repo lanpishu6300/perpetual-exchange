@@ -148,8 +148,8 @@ perpetual_exchange/
 
 ```bash
 # Clone repository
-git clone https://github.com/lanpishu6300/perpetual-exchange.git
-cd perpetual-exchange
+git clone https://github.com/lanpishu6300/matching-engine.git
+cd matching-engine
 
 # Build
 mkdir build && cd build

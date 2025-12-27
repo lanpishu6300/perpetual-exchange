@@ -118,7 +118,7 @@ cp ../config.ini.example ../config.ini
 
 ```bash
 # 构建生产镜像
-docker build -f Dockerfile.production -t perpetual-exchange:prod .
+docker build -f Dockerfile.production -t matching-engine:prod .
 
 # 运行容器
 docker run -d \
@@ -126,7 +126,7 @@ docker run -d \
     -p 8080:8080 \
     -v $(pwd)/data:/app/data \
     -v $(pwd)/logs:/app/logs \
-    perpetual-exchange:prod
+    matching-engine:prod
 ```
 
 ### 3. 健康检查

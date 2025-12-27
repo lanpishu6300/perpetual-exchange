@@ -187,7 +187,7 @@ cd build
 ```bash
 docker-compose up --build
 # 或
-docker run --rm --platform linux/amd64 perpetual-exchange:simd
+docker run --rm --platform linux/amd64 matching-engine:simd
 ```
 
 ### 综合对比
