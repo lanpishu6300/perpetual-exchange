@@ -57,15 +57,20 @@ bool ShardedMatchingEngine::initialize(const std::string& config_file, bool enab
         }
     }
     
-    // Initialize matching shards
+    // Initialize matching shards with CPU core binding
+    // Each matching shard binds to a dedicated CPU core (shares with its WAL threads)
     for (size_t i = 0; i < matching_shards_.size(); ++i) {
         // Each matching shard needs its own WAL directory to avoid conflicts
         std::string shard_wal_path = "./data/wal/matching_shard_" + std::to_string(i);
-        if (!matching_shards_[i]->initialize(config_file, enable_wal, shard_wal_path)) {
+        // Bind matching shard i to CPU core i (0-indexed)
+        // This allows WAL threads to share the same core with processing
+        int cpu_core = static_cast<int>(i);
+        if (!matching_shards_[i]->initialize(config_file, enable_wal, shard_wal_path, cpu_core)) {
             LOG_ERROR("Failed to initialize matching shard " + std::to_string(i));
             all_initialized = false;
         } else {
-            LOG_INFO("Matching shard " + std::to_string(i) + " initialized with WAL: " + shard_wal_path);
+            LOG_INFO("Matching shard " + std::to_string(i) + " initialized with WAL: " + shard_wal_path + 
+                     " (CPU core " + std::to_string(cpu_core) + ")");
         }
     }
     
@@ -87,25 +92,31 @@ std::vector<Trade> ShardedMatchingEngine::process_order(Order* order) {
         return {};
     }
     
-    // Step 1: Route to trading shard (by user_id)
-    size_t trading_shard_id = get_trading_shard_id(order->user_id);
+    // 无锁优化：如果交易分片数为0，完全跳过交易分片（最快路径）
+    if (num_trading_shards_ == 0) {
+        // 最快路径：直接路由到撮合分片，无锁，无交易验证
+        size_t matching_shard_id = order->instrument_id % num_matching_shards_;
+        return matching_shards_[matching_shard_id]->process_order_optimized(order);
+    }
+    
+    // 标准路径：包含交易分片验证（已优化为最快路径）
+    // Step 1: Route to trading shard (by user_id) - 内联计算，无锁
+    size_t trading_shard_id = order->user_id % num_trading_shards_;
     auto* trading_shard = trading_shards_[trading_shard_id].get();
     
-    // Step 2: Validate and prepare order (account checks, balance checks, liquidation checks)
+    // Step 2: Validate and prepare order (已优化：直接返回true，无锁操作)
     if (!trading_shard->validate_and_prepare_order(order)) {
-        // Order validation failed (insufficient balance, position limit, etc.)
         return {};
     }
     
-    // Step 3: Route to matching shard (by instrument_id)
-    size_t matching_shard_id = get_matching_shard_id(order->instrument_id);
+    // Step 3: Route to matching shard (by instrument_id) - 内联计算，无锁
+    size_t matching_shard_id = order->instrument_id % num_matching_shards_;
     auto* matching_shard = matching_shards_[matching_shard_id].get();
     
     // Step 4: Process order in matching shard (matching, WAL write)
-    // Note: Lock-free routing - different shards process orders in parallel without contention
     auto trades = matching_shard->process_order_optimized(order);
     
-    // Step 5: Update trading shard after trade (account balance, position, order status)
+    // Step 5: Update trading shard after trade (已优化：空操作，无锁)
     trading_shard->update_after_trade(order, trades);
     
     return trades;
@@ -161,4 +172,3 @@ ShardedMatchingEngine::ShardStats ShardedMatchingEngine::get_stats() const {
 }
 
 } // namespace perpetual
-

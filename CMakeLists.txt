@@ -256,6 +256,31 @@ target_link_libraries(test_optimized_v3_safe
 )
 
 # Unit / integration / functional tests (fetch GTest if missing)
+# Create a separate source list for tests that includes necessary files
+file(GLOB_RECURSE TEST_CORE_SOURCES
+    "src/core/*.cpp"
+)
+# Remove problematic files
+list(REMOVE_ITEM TEST_CORE_SOURCES 
+    ${CMAKE_SOURCE_DIR}/src/core/event_sourcing_advanced.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/matching_engine_production.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/matching_engine_production_v2.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/matching_engine_production_v3.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/orderbook_art.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/orderbook_art_simd.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/matching_engine_art.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/matching_engine_art_simd.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/persistence.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/persistence_async.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/persistence_optimized.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/rest_api_server.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/api_gateway.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/notification_service.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/monitoring_system.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/market_data_service.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/position.cpp
+)
+
 list(REMOVE_ITEM CORE_SOURCES ${CMAKE_SOURCE_DIR}/src/core/market_data_service.cpp)
 find_package(GTest QUIET)
 if(NOT GTest_FOUND)
@@ -270,7 +295,7 @@ if(NOT GTest_FOUND)
 endif()
 
 if(GTest_FOUND OR googletest_POPULATED)
-    add_executable(test_auth_manager tests/unit/test_auth_manager.cpp ${CORE_SOURCES})
+    add_executable(test_auth_manager tests/unit/test_auth_manager.cpp ${TEST_CORE_SOURCES})
     target_link_libraries(test_auth_manager
         PRIVATE
         GTest::gtest
@@ -280,7 +305,7 @@ if(GTest_FOUND OR googletest_POPULATED)
         crypto
     )
     
-    add_executable(test_liquidation_engine tests/unit/test_liquidation_engine.cpp ${CORE_SOURCES})
+    add_executable(test_liquidation_engine tests/unit/test_liquidation_engine.cpp ${TEST_CORE_SOURCES})
     target_link_libraries(test_liquidation_engine
         PRIVATE
         GTest::gtest
@@ -290,7 +315,7 @@ if(GTest_FOUND OR googletest_POPULATED)
         crypto
     )
     
-    add_executable(test_funding_rate_manager tests/unit/test_funding_rate_manager.cpp ${CORE_SOURCES})
+    add_executable(test_funding_rate_manager tests/unit/test_funding_rate_manager.cpp ${TEST_CORE_SOURCES})
     target_link_libraries(test_funding_rate_manager
         PRIVATE
         GTest::gtest
@@ -300,7 +325,7 @@ if(GTest_FOUND OR googletest_POPULATED)
         crypto
     )
     
-    add_executable(test_matching_engine_event_sourcing tests/unit/test_matching_engine_event_sourcing.cpp ${CORE_SOURCES})
+    add_executable(test_matching_engine_event_sourcing tests/unit/test_matching_engine_event_sourcing.cpp ${TEST_CORE_SOURCES})
     target_link_libraries(test_matching_engine_event_sourcing
         PRIVATE
         GTest::gtest
@@ -310,7 +335,47 @@ if(GTest_FOUND OR googletest_POPULATED)
         crypto
     )
     
-    add_executable(test_trading_workflow tests/integration/test_trading_workflow.cpp ${CORE_SOURCES})
+    add_executable(test_account_manager tests/unit/test_account_manager.cpp ${TEST_CORE_SOURCES})
+    target_link_libraries(test_account_manager
+        PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        pthread
+        ssl
+        crypto
+    )
+    
+    add_executable(test_position_manager tests/unit/test_position_manager.cpp ${TEST_CORE_SOURCES})
+    target_link_libraries(test_position_manager
+        PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        pthread
+        ssl
+        crypto
+    )
+    
+    add_executable(test_orderbook tests/unit/test_orderbook.cpp ${TEST_CORE_SOURCES})
+    target_link_libraries(test_orderbook
+        PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        pthread
+        ssl
+        crypto
+    )
+    
+    add_executable(test_order_validator tests/unit/test_order_validator.cpp ${TEST_CORE_SOURCES})
+    target_link_libraries(test_order_validator
+        PRIVATE
+        GTest::gtest
+        GTest::gtest_main
+        pthread
+        ssl
+        crypto
+    )
+    
+    add_executable(test_trading_workflow tests/integration/test_trading_workflow.cpp ${TEST_CORE_SOURCES})
     target_link_libraries(test_trading_workflow
         PRIVATE
         GTest::gtest
@@ -320,7 +385,7 @@ if(GTest_FOUND OR googletest_POPULATED)
         crypto
     )
     
-    add_executable(test_production_performance tests/performance/test_production_performance.cpp ${CORE_SOURCES})
+    add_executable(test_production_performance tests/performance/test_production_performance.cpp ${TEST_CORE_SOURCES})
     target_link_libraries(test_production_performance
         PRIVATE
         GTest::gtest
@@ -330,7 +395,7 @@ if(GTest_FOUND OR googletest_POPULATED)
         crypto
     )
 
-    add_executable(test_comprehensive_functional tests/functional/comprehensive_functional_test.cpp ${CORE_SOURCES})
+    add_executable(test_comprehensive_functional tests/functional/comprehensive_functional_test.cpp ${TEST_CORE_SOURCES})
     target_link_libraries(test_comprehensive_functional
         PRIVATE
         GTest::gtest
@@ -340,7 +405,7 @@ if(GTest_FOUND OR googletest_POPULATED)
         crypto
     )
 
-    add_executable(test_order_flow tests/functional/order_flow_test.cpp ${CORE_SOURCES})
+    add_executable(test_order_flow tests/functional/order_flow_test.cpp ${TEST_CORE_SOURCES})
     target_link_libraries(test_order_flow
         PRIVATE
         GTest::gtest
@@ -350,7 +415,7 @@ if(GTest_FOUND OR googletest_POPULATED)
         crypto
     )
 
-    add_executable(test_api_integration tests/functional/api_integration_test.cpp ${CORE_SOURCES})
+    add_executable(test_api_integration tests/functional/api_integration_test.cpp ${TEST_CORE_SOURCES})
     target_link_libraries(test_api_integration
         PRIVATE
         GTest::gtest
@@ -360,7 +425,7 @@ if(GTest_FOUND OR googletest_POPULATED)
         crypto
     )
 
-    add_executable(test_consensus tests/functional/consensus_test.cpp ${CORE_SOURCES})
+    add_executable(test_consensus tests/functional/consensus_test.cpp ${TEST_CORE_SOURCES})
     target_link_libraries(test_consensus
         PRIVATE
         GTest::gtest
@@ -375,6 +440,10 @@ if(GTest_FOUND OR googletest_POPULATED)
     add_test(NAME LiquidationEngineTest COMMAND test_liquidation_engine)
     add_test(NAME FundingRateManagerTest COMMAND test_funding_rate_manager)
     add_test(NAME MatchingEngineEventSourcingTest COMMAND test_matching_engine_event_sourcing)
+    add_test(NAME AccountManagerTest COMMAND test_account_manager)
+    add_test(NAME PositionManagerTest COMMAND test_position_manager)
+    add_test(NAME OrderBookTest COMMAND test_orderbook)
+    add_test(NAME OrderValidatorTest COMMAND test_order_validator)
     add_test(NAME TradingWorkflowTest COMMAND test_trading_workflow)
     add_test(NAME ProductionPerformanceTest COMMAND test_production_performance)
     add_test(NAME ComprehensiveFunctionalTest COMMAND test_comprehensive_functional)
